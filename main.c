@@ -1,65 +1,102 @@
 #include <limits.h>
+#include <fcntl.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "constants.h"
 #include "parser.h"
 #include "operations.h"
 
-int main() {
+// check if the bytes were written in the file, not necessary, blame OS
+
+int main(int argc, char** argv) {
+  
+  int write_fd; 
+  DIR* pDir = opendir(argv[1]);
 
   if (kvs_init()) {
     fprintf(stderr, "Failed to initialize KVS\n");
     return 1;
   }
 
+  if(argc < 4){
+    fprintf(stderr, "Insufficient number of arguments. Use: %s<directory path><number of backups>\n", argv[0]);
+  }
+  
+
+
   while (1) {
     char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
     char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
     unsigned int delay;
     size_t num_pairs;
+    char* unknownCommands = "Invalid command. See HELP for usage\n";
 
-    printf("> ");
-    fflush(stdout);
+    struct dirent* file_dir = readdir(pDir);
+    if(file_dir == NULL){
+      fprintf(stderr, "Error opening directory.\n");
+      return -1;
+    }
 
-    switch (get_next(STDIN_FILENO)) {
+    char* file_directory = strcat(argv[1], file_dir->d_name);
+
+    int read_fd = open(file_directory, O_RDONLY);
+    if (read_fd == -1){
+      fprintf(stderr, "Error opening %s\n", file_directory);
+    }
+
+    char* write_directory = strcpy(write_directory, file_directory);
+    int length = strlen(file_directory);
+    file_directory[length-1] = 't';
+    file_directory[length-2] = 'u';
+    file_directory[length-3] = 'o';
+
+
+    int write_fd = open(write_directory, O_CREAT || O_TRUNC);
+
+    switch (get_next(read_fd)) {
       case CMD_WRITE:
-        num_pairs = parse_write(STDIN_FILENO, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+        num_pairs = parse_write(read_fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
         if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          write(write_fd, (void*)unknownCommands, strlen(unknownCommands));
           continue;
         }
 
         if (kvs_write(num_pairs, keys, values)) {
-          fprintf(stderr, "Failed to write pair\n");
+          char* errorMessage = "Failed to write pair\n";
+          write(write_fd, (void*)errorMessage, strlen(errorMessage));
         }
 
         break;
 
       case CMD_READ:
-        num_pairs = parse_read_delete(STDIN_FILENO, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
 
         if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          write(write_fd, (void*)unknownCommands, strlen(unknownCommands));
           continue;
         }
 
         if (kvs_read(num_pairs, keys)) {
-          fprintf(stderr, "Failed to read pair\n");
+          char* errorMessage = "Failed to read pair\n";
+          write(write_fd, (void*)errorMessage, strlen(errorMessage));
         }
         break;
 
       case CMD_DELETE:
-        num_pairs = parse_read_delete(STDIN_FILENO, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
 
         if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+          write(write_fd, (void*)unknownCommands, strlen(unknownCommands));
           continue;
         }
 
         if (kvs_delete(num_pairs, keys)) {
-          fprintf(stderr, "Failed to delete pair\n");
+          char* errorMessage = "Failed to delete pair\n";
+          write(write_fd, (void*)errorMessage, strlen(errorMessage));
         }
         break;
 
@@ -69,13 +106,14 @@ int main() {
         break;
 
       case CMD_WAIT:
-        if (parse_wait(STDIN_FILENO, &delay, NULL) == -1) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        if (parse_wait(read_fd, &delay, NULL) == -1) {
+          write(write_fd, (void*)unknownCommands, strlen(unknownCommands));
           continue;
         }
 
         if (delay > 0) {
-          printf("Waiting...\n");
+          char* message = "Waiting...\n";
+          write(write_fd, (void*)message, strlen(message)-1);
           kvs_wait(delay);
         }
         break;
@@ -83,12 +121,13 @@ int main() {
       case CMD_BACKUP:
 
         if (kvs_backup()) {
-          fprintf(stderr, "Failed to perform backup.\n");
+          char* errorMessage = "Failed to perform backup.\n";
+          write(write_fd, (void*)errorMessage, strlen(errorMessage));
         }
         break;
 
       case CMD_INVALID:
-        fprintf(stderr, "Invalid command. See HELP for usage\n");
+        write(write_fd, (void*)unknownCommands, strlen(unknownCommands));
         break;
 
       case CMD_HELP:
