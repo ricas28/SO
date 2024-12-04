@@ -39,6 +39,9 @@ int main(int argc, char** argv) {
       return -1;
     }
 
+    if(!strcmp(file_dir->d_name, ".") || !strcmp(file_dir->d_name, ".."))
+      continue;
+
     char* file_directory = strcat(argv[1], file_dir->d_name);
 
     int read_fd = open(file_directory, O_RDONLY);
@@ -46,11 +49,13 @@ int main(int argc, char** argv) {
       fprintf(stderr, "Error opening %s\n", file_directory);
     }
 
-    char* write_directory = strcpy(write_directory, file_directory);
     size_t length = strlen(file_directory);
-    file_directory[length-1] = 't';
-    file_directory[length-2] = 'u';
-    file_directory[length-3] = 'o';
+    char write_directory[length]; 
+    strncpy(write_directory, file_directory, length);
+    
+    write_directory[length-1] = 't';
+    write_directory[length-2] = 'u';
+    write_directory[length-3] = 'o';
 
 
     write_fd = open(write_directory, O_CREAT || O_TRUNC);
@@ -99,7 +104,6 @@ int main(int argc, char** argv) {
         break;
 
       case CMD_SHOW:
-
         kvs_show();
         break;
 
@@ -117,7 +121,6 @@ int main(int argc, char** argv) {
         break;
 
       case CMD_BACKUP:
-
         if (kvs_backup()) {
           char* errorMessage = "Failed to perform backup.\n";
           write(write_fd, (void*)errorMessage, strlen(errorMessage));
@@ -150,4 +153,7 @@ int main(int argc, char** argv) {
         return 0;
     }
   }
+
+  if (closedir(pDir) != 0)
+    printf("shit\n");
 }
