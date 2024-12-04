@@ -25,8 +25,6 @@ int main(int argc, char** argv) {
   if(argc < 4){
     fprintf(stderr, "Insufficient number of arguments. Use: %s<directory path><number of backups>\n", argv[0]);
   }
-  
-
 
   while (1) {
     char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
@@ -49,13 +47,13 @@ int main(int argc, char** argv) {
     }
 
     char* write_directory = strcpy(write_directory, file_directory);
-    int length = strlen(file_directory);
+    size_t length = strlen(file_directory);
     file_directory[length-1] = 't';
     file_directory[length-2] = 'u';
     file_directory[length-3] = 'o';
 
 
-    int write_fd = open(write_directory, O_CREAT || O_TRUNC);
+    write_fd = open(write_directory, O_CREAT || O_TRUNC);
 
     switch (get_next(read_fd)) {
       case CMD_WRITE:
