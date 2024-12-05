@@ -23,13 +23,14 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
 /// @param keys Array of keys' strings.
 /// @param fd File descriptor to write the (successful) output.
 /// @return 0 if the key reading, 1 otherwise.
-int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
+int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd);
 
 /// Deletes key value pairs from the KVS.
 /// @param num_pairs Number of pairs to read.
 /// @param keys Array of keys' strings.
+/// @param fd File descriptor to write 
 /// @return 0 if the pairs were deleted successfully, 1 otherwise.
-int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
+int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd);
 
 /// Writes the state of the KVS.
 /// @param fd File descriptor to write the output.
@@ -46,5 +47,12 @@ void kvs_wait_backup();
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
 void kvs_wait(unsigned int delay_ms);
+
+/// Writes everything that the buffer has to the file indicated by fd.
+/// @param fd File descriptor to write output.
+/// @param buffer Buffer with mensage to write.
+/// @param buffer_size Size of the buffer.
+/// @return 0 if the write was successful, -1 otherwise.
+int write_buffer(int fd, char *buffer, size_t buffer_size);
 
 #endif  // KVS_OPERATIONS_H
