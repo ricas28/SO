@@ -13,17 +13,23 @@
 // check if the bytes were written in the file, not necessary, blame OS
 
 int main(int argc, char** argv) {
-  
-  int write_fd; 
-  DIR* pDir = opendir(argv[1]);
+  int read_fd, write_fd; 
+  DIR* pDir;
 
   if (kvs_init()) {
     fprintf(stderr, "Failed to initialize KVS\n");
-    return 1;
+    return -1;
   }
 
   if(argc < 4){
     fprintf(stderr, "Insufficient number of arguments. Use: %s<directory path><number of backups>\n", argv[0]);
+    return -1;
+  }
+  size_t direcotry_size = sizeof(argv[1]);
+  
+  if((pDir = opendir(argv[1])) == NULL){
+    fprintf(stderr, "Failed to open directory\n");
+    return -1;
   }
 
   while (1) {
@@ -33,32 +39,33 @@ int main(int argc, char** argv) {
     size_t num_pairs;
     char* unknownCommands = "Invalid command. See HELP for usage\n";
 
-    struct dirent* file_dir = readdir(pDir);
-    if(file_dir == NULL){
-      fprintf(stderr, "Error opening directory.\n");
-      return -1;
+    struct dirent* file_dir = readdir(pDir);      
+    if(file_dir != NULL){
+      if(!strcmp(file_dir->d_name, ".") || !strcmp(file_dir->d_name, ".."))
+        continue;
+
+      char file_directory[direcotry_size + sizeof(file_dir->d_name)];
+      snprintf(file_directory, sizeof(file_directory), "%s%s", argv[1], file_dir->d_name);
+
+      if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
+        fprintf(stderr, "Error opening read file: %s\n", file_directory);
+        continue;
+      }
+
+      size_t length = strlen(file_directory);
+      char write_directory[length+1]; 
+      strcpy(write_directory, file_directory);
+      write_directory[length-1] = 't';
+      write_directory[length-2] = 'u';
+      write_directory[length-3] = 'o';
+
+      write_fd = open(write_directory, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+      if(write_fd == -1){
+        fprintf(stderr, "Error opening .out file\n");
+        close(read_fd);
+        continue;
+      }
     }
-
-    if(!strcmp(file_dir->d_name, ".") || !strcmp(file_dir->d_name, ".."))
-      continue;
-
-    char* file_directory = strcat(argv[1], file_dir->d_name);
-
-    int read_fd = open(file_directory, O_RDONLY);
-    if (read_fd == -1){
-      fprintf(stderr, "Error opening %s\n", file_directory);
-    }
-
-    size_t length = strlen(file_directory);
-    char write_directory[length]; 
-    strncpy(write_directory, file_directory, length);
-    
-    write_directory[length-1] = 't';
-    write_directory[length-2] = 'u';
-    write_directory[length-3] = 'o';
-
-
-    write_fd = open(write_directory, O_CREAT || O_TRUNC);
 
     switch (get_next(read_fd)) {
       case CMD_WRITE:
@@ -104,7 +111,7 @@ int main(int argc, char** argv) {
         break;
 
       case CMD_SHOW:
-        kvs_show();
+        kvs_show(write_fd);
         break;
 
       case CMD_WAIT:
@@ -150,10 +157,8 @@ int main(int argc, char** argv) {
 
       case EOC:
         kvs_terminate();
+        closedir(pDir);
         return 0;
     }
   }
-
-  if (closedir(pDir) != 0)
-    printf("shit\n");
 }

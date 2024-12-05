@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "kvs.h"
 #include "constants.h"
@@ -94,11 +96,27 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE]) {
   return 0;
 }
 
-void kvs_show() {
+void kvs_show(int fd) {
   for (int i = 0; i < TABLE_SIZE; i++) {
     KeyNode *keyNode = kvs_table->table[i];
     while (keyNode != NULL) {
-      printf("(%s, %s)\n", keyNode->key, keyNode->value);
+      char* key = keyNode->key;
+      char* value = keyNode->value;
+      char buffer[sizeof(key) + sizeof(value) + 5 *sizeof(char) - 2];
+      if(snprintf(buffer, sizeof(buffer), "(%s, %s)\n", key, value) == -1){
+        fprintf(stderr, "Error alocating memory on SHOW command.\n");
+        return;
+      }
+      size_t len = sizeof(buffer) - 1;
+      size_t done = 0;
+      while (len > done) {
+          ssize_t bytes_written = write(fd, buffer + done, len - done);
+          if (bytes_written < 0) {
+              fprintf(stderr, "Error writing to output file.\n");
+              return;
+          }
+          done += (size_t)bytes_written;
+      }
       keyNode = keyNode->next; // Move to the next node
     }
   }
