@@ -14,6 +14,8 @@
 
 int main(int argc, char** argv) {
   int read_fd, write_fd; 
+  int max_backups = atoi(argv[2]);
+  int backups_left = max_backups;
   DIR* pDir;
 
   if (kvs_init()) {
@@ -25,7 +27,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Insufficient number of arguments. Use: %s<directory path><number of backups>\n", argv[0]);
     return -1;
   }
-  size_t direcotry_size = strlen(argv[1]);
+  size_t directory_size = strlen(argv[1]);
   
   if((pDir = opendir(argv[1])) == NULL){
     fprintf(stderr, "Failed to open directory\n");
@@ -48,7 +50,7 @@ int main(int argc, char** argv) {
         continue;
       
     /** Build relative path of file. */
-    char file_directory[direcotry_size + file_name_size + 1];
+    char file_directory[directory_size + file_name_size + 1];
     snprintf(file_directory, sizeof(file_directory), "%s%s", argv[1], file_dir->d_name);
 
     if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
@@ -132,7 +134,7 @@ int main(int argc, char** argv) {
           break;
 
         case CMD_BACKUP:
-          if (kvs_backup()) {
+          if (kvs_backup(file_directory, &backups_left, max_backups)) { //args: file directory, backup number
             fprintf(stderr,"Failed to perform backup.\n");
           }
           break;

@@ -4,6 +4,8 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "kvs.h"
 #include "constants.h"
@@ -143,7 +145,45 @@ void kvs_show(int fd) {
   }
 }
 
-int kvs_backup() {
+int kvs_backup(char file_name[], int* backups_left, int max_backups){
+  pid_t pid = fork();
+  int status;
+  if (pid < 0){
+    return 1;
+  }
+  else if(pid == 0){
+    size_t length = strlen(file_name);
+    char new_file[length-2]; 
+    strncpy(new_file, file_name, length-4);
+    new_file[length-3] = '\0';
+    size_t backup_number = (size_t) (max_backups - *backups_left + 1);
+    size_t numsize = 0;
+    for (size_t backup_number_copy = backup_number; backup_number_copy > 0; backup_number_copy/=10){
+      numsize++;
+    }
+    char buffer[length - 4 + numsize + 5*sizeof(char)];
+    snprintf(buffer, sizeof(buffer), "(-%zd.bck)", backup_number);
+    char new_file_name[strlen(new_file) + strlen(buffer)]; 
+    strcat(new_file_name, new_file); //fix this
+    strcat(new_file_name, buffer); //fix this
+    int fd = open(new_file_name, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR, S_IWUSR);
+    if (fd == -1)
+      fprintf(stderr, "Failed backup file opening.\n");
+    kvs_show(fd);
+    backups_left--;
+    return 0;
+  }
+  else{
+    if(*backups_left == 0){
+      wait(&status);
+      backups_left--;
+      kvs_backup(file_name, backups_left, max_backups);
+      return 1;
+    }
+    else{
+      return 0;
+    }
+  }    
   return 0;
 }
 
