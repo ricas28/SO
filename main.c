@@ -42,10 +42,9 @@ int main(int argc, char** argv) {
      
     size_t file_name_size = strlen(file_dir->d_name);
     /** Check if file is good to open (needs to be an actual .job file). */
-    if(!strcmp(file_dir->d_name, ".") || !strcmp(file_dir->d_name, "..") ||  
-          !(file_dir->d_name[file_name_size-1] == 'b' && file_dir->d_name[file_name_size-2] == 'o' &&
-          file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
-        continue;
+    if(!(file_dir->d_name[file_name_size-1] == 'b' && file_dir->d_name[file_name_size-2] == 'o' &&
+        file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
+          continue;
       
     /** Build relative path of file. */
     char file_directory[directory_size + file_name_size + 1];
