@@ -10,12 +10,9 @@
 #include "parser.h"
 #include "operations.h"
 
-// check if the bytes were written in the file, not necessary, blame OS
-
 int main(int argc, char** argv) {
   int read_fd, write_fd; 
-  int max_backups = atoi(argv[2]);
-  int backups_left = max_backups;
+  size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
   DIR* pDir;
 
   if (kvs_init()) {
@@ -24,7 +21,7 @@ int main(int argc, char** argv) {
   }
 
   if(argc < 4){
-    fprintf(stderr, "Insufficient number of arguments. Use: %s<directory path><number of backups>\n", argv[0]);
+    fprintf(stderr, "Insufficient number of arguments. Use: %s <directory path> <max number of backups> <max number of threads>\n", argv[0]);
     return -1;
   }
   size_t directory_size = strlen(argv[1]);
@@ -41,6 +38,7 @@ int main(int argc, char** argv) {
     char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
     unsigned int delay;
     size_t num_pairs;
+    size_t backups_done = 0;
      
     size_t file_name_size = strlen(file_dir->d_name);
     /** Check if file is good to open (needs to be an actual .job file). */
@@ -134,7 +132,7 @@ int main(int argc, char** argv) {
           break;
 
         case CMD_BACKUP:
-          if (kvs_backup(file_directory, &backups_left, max_backups)) { //args: file directory, backup number
+          if (kvs_backup(file_directory, &backups_done, &backups_left)) { 
             fprintf(stderr,"Failed to perform backup.\n");
           }
           break;

@@ -145,46 +145,71 @@ void kvs_show(int fd) {
   }
 }
 
-int kvs_backup(char file_name[], int* backups_left, int max_backups){
-  pid_t pid = fork();
+int create_backup_file(char file_name[], size_t backup_number){
+  size_t length = strlen(file_name);
+  /** We only want to keep the actual file name, instead of the ".job". */
+  char job_file_name[length - 3]; 
+  /** Copy only the actual file name. */
+  strncpy(job_file_name, file_name, length-4);
+  job_file_name[length-4] = '\0';
+
+  /** Calculate length of backup_number. */
+  size_t numsize = 0;
+  for (size_t backup_number_copy = backup_number; backup_number_copy > 0; backup_number_copy/=10)
+    numsize++;
+
+  /** Create a buffer for sufix of file name.. */
+  /** strlen("-.bck") = 5 */
+  char buffer[numsize + 5*sizeof(char) + 1];
+  snprintf(buffer, sizeof(buffer), "-%zd.bck", backup_number);
+
+  /** Create a "string" that can hold the whole backup file's name.*/
+  char new_file_name[length - 4 + numsize + 5*sizeof(char) + 1]; 
+  strncpy(new_file_name, job_file_name, length - 4); 
+  new_file_name[length - 4] = '\0';
+  strncat(new_file_name, buffer, numsize + 5*sizeof(char)); 
+
+  /** Open backup file. */
+  int fd = open(new_file_name, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+  return fd;
+}
+
+int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left){
+  pid_t pid;
   int status;
+
+  /** Wait until there's backups to do. */
+  if(*backups_left == 0){
+    /** Wait until a child process finishes. */
+    wait(&status);
+    /** There's a new backup that can be done. */
+    (*backups_left)++;  
+  }
+
+  /** Create a new process. */
+  pid = fork();
+  /** Problema creating a fork. */
   if (pid < 0){
+    fprintf(stderr, "Failure creating new process for backup\n");
     return 1;
   }
+  /** Child. */
   else if(pid == 0){
-    size_t length = strlen(file_name);
-    char new_file[length-2]; 
-    strncpy(new_file, file_name, length-4);
-    new_file[length-3] = '\0';
-    size_t backup_number = (size_t) (max_backups - *backups_left + 1);
-    size_t numsize = 0;
-    for (size_t backup_number_copy = backup_number; backup_number_copy > 0; backup_number_copy/=10){
-      numsize++;
-    }
-    char buffer[length - 4 + numsize + 5*sizeof(char)];
-    snprintf(buffer, sizeof(buffer), "(-%zd.bck)", backup_number);
-    char new_file_name[strlen(new_file) + strlen(buffer)]; 
-    strcat(new_file_name, new_file); //fix this
-    strcat(new_file_name, buffer); //fix this
-    int fd = open(new_file_name, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR, S_IWUSR);
-    if (fd == -1)
-      fprintf(stderr, "Failed backup file opening.\n");
-    kvs_show(fd);
-    backups_left--;
-    return 0;
-  }
-  else{
-    if(*backups_left == 0){
-      wait(&status);
-      backups_left--;
-      kvs_backup(file_name, backups_left, max_backups);
+    int fd = create_backup_file(file_name, ++(*backups_done));
+    /** Problem opening the backup file. */
+    if(fd < 0){
+      fprintf(stderr, "Failure creating backup file\n");
       return 1;
     }
-    else{
-      return 0;
-    }
+    kvs_show(fd);
+    exit(EXIT_SUCCESS);
+  }
+  /** Parent. */
+  else{
+    (*backups_left)--;
+    (*backups_done)++;
+    return 0;
   }    
-  return 0;
 }
 
 void kvs_wait(unsigned int delay_ms) {
