@@ -198,9 +198,11 @@ int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left){
     int fd = create_backup_file(file_name, ++(*backups_done));
     /** Problem opening the backup file. */
     if(fd < 0){
-      fprintf(stderr, "Failure creating backup file\n");
-      return 1;
+      fprintf(stderr, "Failure creating backup %zd for file \"%s\"\n", 
+          *backups_done,file_name);
+      exit(EXIT_FAILURE);
     }
+    /** Copy info of KVS. */
     kvs_show(fd);
     exit(EXIT_SUCCESS);
   }
