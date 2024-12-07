@@ -145,6 +145,10 @@ void kvs_show(int fd) {
   }
 }
 
+/// Opens a backup file and returns it's file descriptor.
+/// @param file_name Name of the .job file.
+/// @param backup_number Number of the backup being done.
+/// @return File descriptor for new backup file.
 int create_backup_file(char file_name[], size_t backup_number){
   size_t length = strlen(file_name);
   /** We only want to keep the actual file name, instead of the ".job". */
