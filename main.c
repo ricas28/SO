@@ -47,9 +47,9 @@ int main(int argc, char** argv) {
           continue;
       
     /** Build relative path of file. */
-    char file_directory[directory_size + file_name_size + 1];
-    snprintf(file_directory, sizeof(file_directory), "%s%s", argv[1], file_dir->d_name);
-
+    char file_directory[directory_size + file_name_size + 2];
+    snprintf(file_directory, sizeof(file_directory), "%s/%s", argv[1], file_dir->d_name);
+    /** Open input file. */
     if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
       fprintf(stderr, "Error opening read file: %s\n", file_directory);
       continue;
@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
       continue;
     }
 
+    /** Loop while there's commands to read. */
     int quit = 0;
     while(!quit)
       switch (get_next(read_fd)) {
