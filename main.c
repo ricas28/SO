@@ -12,9 +12,13 @@
 #include "operations.h"
 #include "File.h"
 
+typedef struct Thread_data{
+  size_t backups_left;
+  File *file;
+}Thread_data;
 
 void *process_file(void *arg){
-  File *file = (File *)arg;
+  Thread_data *thread_data = (Thread_data *)arg;
   char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
   char values[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
   unsigned int delay;
@@ -23,9 +27,9 @@ void *process_file(void *arg){
   int read_fd, write_fd;
 
   /** Build relative path of file. */
-  char file_directory[get_path_size(*file)];
-  snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(*file), 
-                                                            get_file_name(*file));
+  char file_directory[get_path_size(thread_data->file)];
+  snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(thread_data->file), 
+                                                            get_file_name(thread_data->file));
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -101,7 +105,7 @@ void *process_file(void *arg){
       break;
 
     case CMD_BACKUP:
-      if (kvs_backup(file_directory, &backups_done, &backups_left)) { 
+      if (kvs_backup(file_directory, &backups_done, &thread_data->backups_left)) { 
         fprintf(stderr,"Failed to perform backup.\n");
       }
       break;
@@ -131,15 +135,17 @@ void *process_file(void *arg){
       /** Close input and output file*/
       close(read_fd);
       close(write_fd);
+      free(thread_data->file);
       return NULL;
   }
+  return NULL;
 }
 
 int main(int argc, char** argv) {
   size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
   pthread_t threads[MAX_THREADS];
-  int threads_index = 0;
+  size_t threads_index = 0;
   DIR* pDir;
 
   if (kvs_init()) {
@@ -167,15 +173,17 @@ int main(int argc, char** argv) {
         file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
           continue;
       
+    Thread_data new_thread;
+    new_thread.backups_left = backups_left;
     /** Create a new File. */
-    File file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
+    new_thread.file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
       /** Wait for a thread to finish. */
       pthread_join(threads[threads_index % MAX_THREADS], NULL);
     }
     /** Create a new thread. */
-    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) &file);
+    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) &new_thread);
     threads_index++;
   }
   /** Ending program. */
