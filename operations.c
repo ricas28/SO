@@ -4,6 +4,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -178,10 +179,11 @@ int create_backup_file(char file_name[], size_t backup_number){
   return fd;
 }
 
-int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left){
+int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pthread_mutex_t *backup_mutex){
   pid_t pid;
   int status;
 
+  pthread_mutex_lock(backup_mutex);
   /** Wait until there's backups to do. */
   if(*backups_left == 0){
     /** Wait until a child process finishes. */
@@ -189,6 +191,7 @@ int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left){
     /** There's a new backup that can be done. */
     (*backups_left)++;  
   }
+  pthread_mutex_unlock(backup_mutex);
 
   /** Create a new process. */
   pid = fork();

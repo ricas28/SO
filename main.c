@@ -13,6 +13,7 @@
 #include "File.h"
 
 typedef struct Thread_data{
+  pthread_mutex_t *backup_mutex;
   size_t *backups_left;
   File *file;
 }Thread_data;
@@ -30,6 +31,7 @@ void *process_file(void *arg){
   char file_directory[get_path_size(thread_data->file)];
   snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(thread_data->file), 
                                                             get_file_name(thread_data->file));
+  printf("A analisar %s\n", file_directory);
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -106,7 +108,7 @@ void *process_file(void *arg){
         break;
 
       case CMD_BACKUP:
-        if (kvs_backup(file_directory, &backups_done, thread_data->backups_left)) { 
+        if (kvs_backup(file_directory, &backups_done, thread_data->backups_left, thread_data->backup_mutex)) { 
           fprintf(stderr,"Failed to perform backup.\n");
         }
         break;
@@ -148,6 +150,7 @@ int main(int argc, char** argv) {
   size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
   pthread_t threads[MAX_THREADS];
+  pthread_mutex_t backup_mutex;
   size_t threads_index = 0;
   DIR* pDir;
 
@@ -167,19 +170,23 @@ int main(int argc, char** argv) {
     return -1;
   }
 
+  /** Initialize mutex for backup. */
+  pthread_mutex_init(&backup_mutex, NULL);
   struct dirent* file_dir;
   /** Keep running until there's no files to read. */
   while ((file_dir = readdir(pDir)) != NULL) {
     size_t file_name_size = strlen(file_dir->d_name);
     /** Check if file is good to open (needs to be an actual .job file). */
-    if(!(file_dir->d_name[file_name_size-1] == 'b' && file_dir->d_name[file_name_size-2] == 'o' &&
-        file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
+    if(!(file_name_size > 4 && file_dir->d_name[file_name_size-1] == 'b' && 
+        file_dir->d_name[file_name_size-2] == 'o' && file_dir->d_name[file_name_size-3] == 'j' && 
+        file_dir->d_name[file_name_size-4] == '.'))
           continue;
       
     Thread_data *new_thread = (Thread_data *)malloc(sizeof(Thread_data));
     new_thread->backups_left = &backups_left;
     /** Create a new File. */
     new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
+    new_thread->backup_mutex = &backup_mutex;
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
       /** Wait for a thread to finish. */
@@ -189,10 +196,13 @@ int main(int argc, char** argv) {
     pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread);
     threads_index++;
   }
+  /** Wait for all backups that might not have finished. */
   /** Wait for all threads. */
-  for(size_t i = 0; i <= threads_index  % MAX_THREADS; i++){
+  size_t limit = threads_index > MAX_THREADS ?  MAX_THREADS : threads_index;
+  for(size_t i = 0; i < limit; i++)
     pthread_join(threads[i], NULL);
-  }
+  /** Destroy backup mutex. */
+  pthread_mutex_destroy(&backup_mutex);
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
