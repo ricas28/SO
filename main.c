@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/wait.h>
 
 #include "constants.h"
 #include "parser.h"
@@ -147,7 +148,8 @@ void *process_file(void *arg){
 }
 
 int main(int argc, char** argv) {
-  size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
+  const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
+  size_t backups_left = MAX_BACKUPS;
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
   pthread_t threads[MAX_THREADS];
   pthread_mutex_t backup_mutex;
@@ -197,12 +199,16 @@ int main(int argc, char** argv) {
     threads_index++;
   }
   /** Wait for all backups that might not have finished. */
+  int status;
+  for(size_t i = 0; i < MAX_BACKUPS; i++)
+    wait(&status);
   /** Wait for all threads. */
   size_t limit = threads_index > MAX_THREADS ?  MAX_THREADS : threads_index;
   for(size_t i = 0; i < limit; i++)
     pthread_join(threads[i], NULL);
   /** Destroy backup mutex. */
   pthread_mutex_destroy(&backup_mutex);
+  
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);

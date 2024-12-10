@@ -21,26 +21,6 @@ static struct timespec delay_to_timespec(unsigned int delay_ms) {
   return (struct timespec){delay_ms / 1000, (delay_ms % 1000) * 1000000};
 }
 
-int write_buffer(int fd, char *buffer, size_t buffer_size){
-  /** Check if buffer isn't NULL.  */
-  if(!buffer)
-    return -1;
-  size_t len = buffer_size;
-  size_t done = 0;
-  /** Sometimes write system call, won't write everything. */
-  while (len > done) {
-    ssize_t bytes_written = write(fd, buffer + done, len - done);
-    /**  Error while writing. */
-    if (bytes_written < 0) {
-      fprintf(stderr, "Failed to Write buffer\n");
-      return -1;
-    }
-    done += (size_t)bytes_written;
-  }
-  /** Write operation was successful. */
-  return 0;
-}
-
 int kvs_init() {
   if (kvs_table != NULL) {
     fprintf(stderr, "KVS state has already been initialized\n");
@@ -61,14 +41,54 @@ int kvs_terminate() {
   return 0;
 }
 
+int write_buffer(int fd, char *buffer, size_t buffer_size){
+  /** Check if buffer isn't NULL.  */
+  if(!buffer)
+    return -1;
+  size_t len = buffer_size;
+  size_t done = 0;
+  /** Sometimes write system call, won't write everything. */
+  while (len > done) {
+    ssize_t bytes_written = write(fd, buffer + done, len - done);
+    /**  Error while writing. */
+    if (bytes_written < 0) {
+      fprintf(stderr, "Failed to Write buffer\n");
+      return -1;
+    }
+    done += (size_t)bytes_written;
+  }
+  /** Write operation was successful. */
+  return 0;
+}
+
+void lock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+  /** Array for avoiding locking the same index twice. */
+  int locked_indexes[TABLE_SIZE];
+
+  for(size_t i = 0; i < num_pairs; i++){
+    /** Index hasn't been tryed to be locked. */
+    if(locked_indexes[hash(keys[i])] == 0){
+      pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
+      /** Index has now been locked. */
+      locked_indexes[hash(keys[i])] = 1;
+    }
+  }
+}
+
+void unlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+  for(size_t i = 0; i < num_pairs; i++){
+    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+  }
+}
+
 int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE]) {
   if (kvs_table == NULL) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
 
-  for(size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Lock all of received inputs. */
+  lock_table_entries(num_pairs, keys);
 
   for (size_t i = 0; i < num_pairs; i++) {
     if (write_pair(kvs_table, keys[i], values[i]) != 0) {
@@ -76,8 +96,8 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
     }
   }
 
-  for(size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Unlock all of received inputs. */
+  unlock_table_entries(num_pairs, keys);
 
   return 0;
 }
@@ -88,8 +108,8 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     return 1;
   }
 
-  for (size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_rdlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Lock all of received inputs. */
+  lock_table_entries(num_pairs, keys);
 
   write(fd, "[", 1*sizeof(char));
   for (size_t i = 0; i < num_pairs; i++) {
@@ -110,8 +130,8 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
   }
   write(fd, "]\n", 2*sizeof(char));
 
-  for (size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Unlock all of received inputs. */
+  unlock_table_entries(num_pairs, keys);
 
   return 0;
 }
@@ -123,8 +143,8 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
   }
   int aux = 0;
 
-  for (size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Lock all of received inputs. */
+  lock_table_entries(num_pairs, keys);
 
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
@@ -142,14 +162,13 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     write(fd, "]\n", 2*sizeof(char));
   }
 
-  for (size_t i = 0; i < num_pairs; i++)
-    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+  /** Unlock all of received inputs. */
+  unlock_table_entries(num_pairs, keys);
 
   return 0;
 }
 
 void kvs_show(int fd) {
-
   for (size_t i = 0; i < TABLE_SIZE; i++)
     pthread_rwlock_rdlock(&kvs_table->lockTable[i]);
 
@@ -181,7 +200,6 @@ int create_backup_file(char file_name[], size_t backup_number){
   size_t length = strlen(file_name);
   /** We only want to keep the actual file name, instead of the ".job". */
   char job_file_name[length - 3]; 
-  /** Copy only the actual file name. */
   strncpy(job_file_name, file_name, length-4);
   job_file_name[length-4] = '\0';
 
@@ -242,8 +260,10 @@ int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pth
   }
   /** Parent. */
   else{
+    pthread_mutex_lock(backup_mutex);
     (*backups_left)--;
     (*backups_done)++;
+    pthread_mutex_unlock(backup_mutex);
     return 0;
   }    
 }
