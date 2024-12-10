@@ -24,6 +24,7 @@ struct HashTable* create_hash_table() {
   if (!ht) return NULL;
   for (int i = 0; i < TABLE_SIZE; i++) {
       ht->table[i] = NULL;
+      pthread_rwlock_init(&ht->table2[i]);
   }
   return ht;
 }
@@ -31,10 +32,9 @@ struct HashTable* create_hash_table() {
 int write_pair(HashTable *ht, const char *key, const char *value) {
     int index = hash(key);
     KeyNode *keyNode = ht->table[index];
-
     // Search for the key node
     while (keyNode != NULL) {
-        if (strcmp(keyNode->key, key) == 0) {
+        if (strcmp(keyNode->key, key) == 0) {    
             free(keyNode->value);
             keyNode->value = strdup(value);
             return 0;
