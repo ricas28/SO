@@ -19,10 +19,10 @@ size_t get_path_size(File file){
     return file.path_size;
 }
 
-char *get_path_directory(File file){
+char *get_file_directory(File file){
     return file.directory_path;
 }
 
-char *get_name(File file){
+char *get_file_name(File file){
     return file.name;
 }

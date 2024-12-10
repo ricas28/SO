@@ -23,8 +23,9 @@ void *process_file(void *arg){
   int read_fd, write_fd;
 
   /** Build relative path of file. */
-  char file_directory[file->path_size];
-  snprintf(file_directory, sizeof(file_directory), "%s/%s", file->directory_path, file->name);
+  char file_directory[get_path_size(*file)];
+  snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(*file), 
+                                                            get_file_name(*file));
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -45,107 +46,100 @@ void *process_file(void *arg){
     close(read_fd);
   }
 
-  /** Loop while there's commands to read. */
-  int quit = 0;
-  while(!quit)
-    switch (get_next(read_fd)) {
-      case CMD_WRITE:
-        num_pairs = parse_write(read_fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-        if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
-          continue;
-        }
 
-        if (kvs_write(num_pairs, keys, values)) {
-          fprintf(stderr, "Failed to write pair\n");
-        }
-
-        break;
-
-      case CMD_READ:
-        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-
-        if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
-          continue;
-        }
-
-        if (kvs_read(num_pairs, keys, write_fd)) {
-          fprintf(stderr, "Failed to read pair\n");
-        }
-        break;
-
-      case CMD_DELETE:
-        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-
-        if (num_pairs == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
-          continue;
-        }
-
-        if (kvs_delete(num_pairs, keys, write_fd)) {
-          fprintf(stderr,"Failed to delete pair\n");
-        }
-        break;
-
-      case CMD_SHOW:
-        kvs_show(write_fd);
-        break;
-
-      case CMD_WAIT:
-        if (parse_wait(read_fd, &delay, NULL) == -1) {
-          fprintf(stderr, "Failed to read pair\n");
-          continue;
-        }
-
-        if (delay > 0) {
-          char message[] = "Waiting...\n";
-          write(write_fd, message, sizeof(message) - 1);
-          kvs_wait(delay);
-        }
-        break;
-
-      case CMD_BACKUP:
-        if (kvs_backup(file_directory, &backups_done, &backups_left)) { 
-          fprintf(stderr,"Failed to perform backup.\n");
-        }
-        break;
-
-      case CMD_INVALID:
+  switch (get_next(read_fd)) {
+    case CMD_WRITE:
+      num_pairs = parse_write(read_fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+      if (num_pairs == 0) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
-        break;
+      }
 
-      case CMD_HELP:
-        char buffer[] = 
-            "Available commands:\n"
-            "  WRITE [(key,value)(key2,value2),...]\n"
-            "  READ [key,key2,...]\n"
-            "  DELETE [key,key2,...]\n"
-            "  SHOW\n"
-            "  WAIT <delay_ms>\n"
-            "  BACKUP\n" 
-            "  HELP\n"
-        ;
-        write_buffer(write_fd, buffer, strlen(buffer));
+      if (kvs_write(num_pairs, keys, values)) {
+        fprintf(stderr, "Failed to write pair\n");
+      }
 
-        break;
-        
-      case CMD_EMPTY:
-        break;
-      case EOC:
-        /** Close input and output file*/
-        close(read_fd);
-        close(write_fd);
-        quit = 1;
+      break;
+
+    case CMD_READ:
+      num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+
+      if (num_pairs == 0) {
+        fprintf(stderr, "Invalid command. See HELP for usage\n");
+      }
+
+      if (kvs_read(num_pairs, keys, write_fd)) {
+        fprintf(stderr, "Failed to read pair\n");
+      }
+      break;
+
+    case CMD_DELETE:
+      num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+
+      if (num_pairs == 0) {
+        fprintf(stderr, "Invalid command. See HELP for usage\n");
+      }
+
+      if (kvs_delete(num_pairs, keys, write_fd)) {
+        fprintf(stderr,"Failed to delete pair\n");
+      }
+      break;
+
+    case CMD_SHOW:
+      kvs_show(write_fd);
+      break;
+
+    case CMD_WAIT:
+      if (parse_wait(read_fd, &delay, NULL) == -1) {
+        fprintf(stderr, "Failed to read pair\n");
+      }
+
+      if (delay > 0) {
+        char message[] = "Waiting...\n";
+        write(write_fd, message, sizeof(message) - 1);
+        kvs_wait(delay);
+      }
+      break;
+
+    case CMD_BACKUP:
+      if (kvs_backup(file_directory, &backups_done, &backups_left)) { 
+        fprintf(stderr,"Failed to perform backup.\n");
+      }
+      break;
+
+    case CMD_INVALID:
+      fprintf(stderr, "Invalid command. See HELP for usage\n");
+      break;
+
+    case CMD_HELP:
+      char buffer[] = 
+          "Available commands:\n"
+          "  WRITE [(key,value)(key2,value2),...]\n"
+          "  READ [key,key2,...]\n"
+          "  DELETE [key,key2,...]\n"
+          "  SHOW\n"
+          "  WAIT <delay_ms>\n"
+          "  BACKUP\n" 
+          "  HELP\n"
+      ;
+      write_buffer(write_fd, buffer, strlen(buffer));
+
+      break;
+      
+    case CMD_EMPTY:
+      break;
+    case EOC:
+      /** Close input and output file*/
+      close(read_fd);
+      close(write_fd);
+      return NULL;
   }
-  return NULL;
 }
 
 int main(int argc, char** argv) {
   size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
-  size_t threads_left = MAX_THREADS;
-  pthread_t threads[threads_left];
+  pthread_t threads[MAX_THREADS];
+  int threads_index = 0;
   DIR* pDir;
 
   if (kvs_init()) {
@@ -173,19 +167,16 @@ int main(int argc, char** argv) {
         file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
           continue;
       
-    /** TODO: percorrer vetor circularmente e backups_left global(?)*/
     /** Create a new File. */
     File file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
-    /** Create a new thread */
-    if(threads_left != 0){
-      pthread_create(&threads[MAX_THREADS-threads_left], NULL, process_file, (void *)&file);
+    /** Array of threads is full. */
+    if(threads_index >= MAX_THREADS){
+      /** Wait for a thread to finish. */
+      pthread_join(threads[threads_index % MAX_THREADS], NULL);
     }
-    else{
-      pthread_join(&threads[MAX_THREADS-1], NULL);
-      threads_left++;
-      pthread_create(&threads[MAX_THREADS-threads_left], NULL, process_file, (void *)&file);
-    }
-    threads_left--;
+    /** Create a new thread. */
+    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) &file);
+    threads_index++;
   }
   /** Ending program. */
   kvs_terminate();
