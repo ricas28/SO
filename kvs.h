@@ -14,8 +14,14 @@ typedef struct KeyNode {
 
 typedef struct HashTable {
     KeyNode *table[TABLE_SIZE];
-    pthread_rwlock_t table2[TABLE_SIZE];
+    pthread_rwlock_t lockTable[TABLE_SIZE];
 } HashTable;
+
+// Hash function based on key initial.
+// @param key Lowercase alphabetical string.
+// @return hash.
+// NOTE: This is not an ideal hash function, but is useful for test purposes of the project
+int hash(const char *key);
 
 /// Creates a new event hash table.
 /// @return Newly created hash table, NULL on failure

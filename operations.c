@@ -67,11 +67,17 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
     return 1;
   }
 
+  for(size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
+
   for (size_t i = 0; i < num_pairs; i++) {
     if (write_pair(kvs_table, keys[i], values[i]) != 0) {
       fprintf(stderr, "Failed to write keypair (%s,%s)\n", keys[i], values[i]);
     }
   }
+
+  for(size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
 
   return 0;
 }
@@ -81,6 +87,9 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
+
+  for (size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_rdlock(&kvs_table->lockTable[hash(keys[i])]);
 
   write(fd, "[", 1*sizeof(char));
   for (size_t i = 0; i < num_pairs; i++) {
@@ -97,8 +106,13 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       write_buffer(fd, buffer,  strlen(keys[i]) + strlen(result) + 3*sizeof(char));
     }
     free(result);
+    
   }
   write(fd, "]\n", 2*sizeof(char));
+
+  for (size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+
   return 0;
 }
 
@@ -108,6 +122,9 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     return 1;
   }
   int aux = 0;
+
+  for (size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
 
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
@@ -125,10 +142,17 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     write(fd, "]\n", 2*sizeof(char));
   }
 
+  for (size_t i = 0; i < num_pairs; i++)
+    pthread_rwlock_unlock(&kvs_table->lockTable[hash(keys[i])]);
+
   return 0;
 }
 
 void kvs_show(int fd) {
+
+  for (size_t i = 0; i < TABLE_SIZE; i++)
+    pthread_rwlock_rdlock(&kvs_table->lockTable[i]);
+
   for (int i = 0; i < TABLE_SIZE; i++) {
     KeyNode *keyNode = kvs_table->table[i];
     while (keyNode != NULL) {
@@ -144,6 +168,9 @@ void kvs_show(int fd) {
       keyNode = keyNode->next; // Move to the next node
     }
   }
+
+  for (size_t i = 0; i < TABLE_SIZE; i++)
+    pthread_rwlock_unlock(&kvs_table->lockTable[i]);
 }
 
 /// Opens a backup file and returns it's file descriptor.
