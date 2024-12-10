@@ -43,7 +43,7 @@ void kvs_show(int fd);
 /// @param backups_left pointer to number of backups left the KVS can do at 
 /// the moment.
 /// @return 0 if the backup was successful, 1 otherwise.
-int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left);
+int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pthread_mutex_t *backup_mutex);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.

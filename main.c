@@ -13,7 +13,8 @@
 #include "File.h"
 
 typedef struct Thread_data{
-  size_t backups_left;
+  pthread_mutex_t *backup_mutex;
+  size_t *backups_left;
   File *file;
 }Thread_data;
 
@@ -30,6 +31,7 @@ void *process_file(void *arg){
   char file_directory[get_path_size(thread_data->file)];
   snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(thread_data->file), 
                                                             get_file_name(thread_data->file));
+  printf("A analisar %s\n", file_directory);
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -50,93 +52,96 @@ void *process_file(void *arg){
     close(read_fd);
   }
 
+  int quit = 0;
+  while(!quit){
+    switch (get_next(read_fd)) {
+      case CMD_WRITE:
+        num_pairs = parse_write(read_fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+        if (num_pairs == 0) {
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        }
 
-  switch (get_next(read_fd)) {
-    case CMD_WRITE:
-      num_pairs = parse_write(read_fd, keys, values, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-      if (num_pairs == 0) {
+        if (kvs_write(num_pairs, keys, values)) {
+          fprintf(stderr, "Failed to write pair\n");
+        }
+
+        break;
+
+      case CMD_READ:
+        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+
+        if (num_pairs == 0) {
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        }
+
+        if (kvs_read(num_pairs, keys, write_fd)) {
+          fprintf(stderr, "Failed to read pair\n");
+        }
+        break;
+
+      case CMD_DELETE:
+        num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
+
+        if (num_pairs == 0) {
+          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        }
+
+        if (kvs_delete(num_pairs, keys, write_fd)) {
+          fprintf(stderr,"Failed to delete pair\n");
+        }
+        break;
+
+      case CMD_SHOW:
+        kvs_show(write_fd);
+        break;
+
+      case CMD_WAIT:
+        if (parse_wait(read_fd, &delay, NULL) == -1) {
+          fprintf(stderr, "Failed to read pair\n");
+        }
+
+        if (delay > 0) {
+          char message[] = "Waiting...\n";
+          write(write_fd, message, sizeof(message) - 1);
+          kvs_wait(delay);
+        }
+        break;
+
+      case CMD_BACKUP:
+        if (kvs_backup(file_directory, &backups_done, thread_data->backups_left, thread_data->backup_mutex)) { 
+          fprintf(stderr,"Failed to perform backup.\n");
+        }
+        break;
+
+      case CMD_INVALID:
         fprintf(stderr, "Invalid command. See HELP for usage\n");
-      }
+        break;
 
-      if (kvs_write(num_pairs, keys, values)) {
-        fprintf(stderr, "Failed to write pair\n");
-      }
+      case CMD_HELP:
+        char buffer[] = 
+            "Available commands:\n"
+            "  WRITE [(key,value)(key2,value2),...]\n"
+            "  READ [key,key2,...]\n"
+            "  DELETE [key,key2,...]\n"
+            "  SHOW\n"
+            "  WAIT <delay_ms>\n"
+            "  BACKUP\n" 
+            "  HELP\n"
+        ;
+        write_buffer(write_fd, buffer, strlen(buffer));
 
-      break;
-
-    case CMD_READ:
-      num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-
-      if (num_pairs == 0) {
-        fprintf(stderr, "Invalid command. See HELP for usage\n");
-      }
-
-      if (kvs_read(num_pairs, keys, write_fd)) {
-        fprintf(stderr, "Failed to read pair\n");
-      }
-      break;
-
-    case CMD_DELETE:
-      num_pairs = parse_read_delete(read_fd, keys, MAX_WRITE_SIZE, MAX_STRING_SIZE);
-
-      if (num_pairs == 0) {
-        fprintf(stderr, "Invalid command. See HELP for usage\n");
-      }
-
-      if (kvs_delete(num_pairs, keys, write_fd)) {
-        fprintf(stderr,"Failed to delete pair\n");
-      }
-      break;
-
-    case CMD_SHOW:
-      kvs_show(write_fd);
-      break;
-
-    case CMD_WAIT:
-      if (parse_wait(read_fd, &delay, NULL) == -1) {
-        fprintf(stderr, "Failed to read pair\n");
-      }
-
-      if (delay > 0) {
-        char message[] = "Waiting...\n";
-        write(write_fd, message, sizeof(message) - 1);
-        kvs_wait(delay);
-      }
-      break;
-
-    case CMD_BACKUP:
-      if (kvs_backup(file_directory, &backups_done, &thread_data->backups_left)) { 
-        fprintf(stderr,"Failed to perform backup.\n");
-      }
-      break;
-
-    case CMD_INVALID:
-      fprintf(stderr, "Invalid command. See HELP for usage\n");
-      break;
-
-    case CMD_HELP:
-      char buffer[] = 
-          "Available commands:\n"
-          "  WRITE [(key,value)(key2,value2),...]\n"
-          "  READ [key,key2,...]\n"
-          "  DELETE [key,key2,...]\n"
-          "  SHOW\n"
-          "  WAIT <delay_ms>\n"
-          "  BACKUP\n" 
-          "  HELP\n"
-      ;
-      write_buffer(write_fd, buffer, strlen(buffer));
-
-      break;
-      
-    case CMD_EMPTY:
-      break;
-    case EOC:
-      /** Close input and output file*/
-      close(read_fd);
-      close(write_fd);
-      free(thread_data->file);
-      return NULL;
+        break;
+        
+      case CMD_EMPTY:
+        break;
+      case EOC:
+        /** Close input and output file*/
+        close(read_fd);
+        close(write_fd);
+        free(thread_data->file);
+        free(thread_data);
+        quit = 1;
+    }
   }
   return NULL;
 }
@@ -145,6 +150,7 @@ int main(int argc, char** argv) {
   size_t backups_left = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
   pthread_t threads[MAX_THREADS];
+  pthread_mutex_t backup_mutex;
   size_t threads_index = 0;
   DIR* pDir;
 
@@ -164,28 +170,39 @@ int main(int argc, char** argv) {
     return -1;
   }
 
+  /** Initialize mutex for backup. */
+  pthread_mutex_init(&backup_mutex, NULL);
   struct dirent* file_dir;
   /** Keep running until there's no files to read. */
   while ((file_dir = readdir(pDir)) != NULL) {
     size_t file_name_size = strlen(file_dir->d_name);
     /** Check if file is good to open (needs to be an actual .job file). */
-    if(!(file_dir->d_name[file_name_size-1] == 'b' && file_dir->d_name[file_name_size-2] == 'o' &&
-        file_dir->d_name[file_name_size-3] == 'j' && file_dir->d_name[file_name_size-4] == '.'))
+    if(!(file_name_size > 4 && file_dir->d_name[file_name_size-1] == 'b' && 
+        file_dir->d_name[file_name_size-2] == 'o' && file_dir->d_name[file_name_size-3] == 'j' && 
+        file_dir->d_name[file_name_size-4] == '.'))
           continue;
       
-    Thread_data new_thread;
-    new_thread.backups_left = backups_left;
+    Thread_data *new_thread = (Thread_data *)malloc(sizeof(Thread_data));
+    new_thread->backups_left = &backups_left;
     /** Create a new File. */
-    new_thread.file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
+    new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
+    new_thread->backup_mutex = &backup_mutex;
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
       /** Wait for a thread to finish. */
       pthread_join(threads[threads_index % MAX_THREADS], NULL);
     }
     /** Create a new thread. */
-    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) &new_thread);
+    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread);
     threads_index++;
   }
+  /** Wait for all backups that might not have finished. */
+  /** Wait for all threads. */
+  size_t limit = threads_index > MAX_THREADS ?  MAX_THREADS : threads_index;
+  for(size_t i = 0; i < limit; i++)
+    pthread_join(threads[i], NULL);
+  /** Destroy backup mutex. */
+  pthread_mutex_destroy(&backup_mutex);
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
