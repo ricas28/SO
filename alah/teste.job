@@ -8,5 +8,5 @@
 # DELETE [c1,chaveAleatoria]
 # Impressão de toda a tabela 
 # SHOW
-WRITE [(c1,v1)(c2,v2)(c4,v3)(c3,v4)]
-READ [c1,c2,c3,c4]
+WRITE [(c1,v1)(c2,v2)(c4,v3)(b3,v4)(b5,v7)]
+READ [c1,c2,b3,b5,c4]

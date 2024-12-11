@@ -13,14 +13,79 @@
 
 static struct HashTable* kvs_table = NULL;
 
+void merge(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t l, size_t m, size_t r) {
+  size_t i, j, k;
+  size_t n1 = m - l + 1;
+  size_t n2 = r - m;
 
+  // Create temp arrays
+  char L[n1][MAX_STRING_SIZE], R[n2][MAX_STRING_SIZE];
+  char Lval[n1][MAX_STRING_SIZE], Rval[n2][MAX_STRING_SIZE];
+
+  // Copy data to temp arrays L[] and R[]
+  for (i = 0; i < n1; i++) {
+      strcpy(L[i], keys[l + i]);
+      strcpy(Lval[i], values[l + i]);
+  }
+  for (j = 0; j < n2; j++) {
+      strcpy(R[j], keys[m + 1 + j]);
+      strcpy(Rval[j], values[m + 1 + j]);
+  }
+
+  // Merge the temp arrays back into keys[l..r] and values[l..r]
+  i = 0;
+  j = 0;
+  k = l;
+  while (i < n1 && j < n2) {
+      if (strcmp(L[i], R[j]) <= 0) {
+          strcpy(keys[k], L[i]);
+          strcpy(values[k], Lval[i]);
+          i++;
+      } else {
+          strcpy(keys[k], R[j]);
+          strcpy(values[k], Rval[j]);
+          j++;
+      }
+      k++;
+  }
+
+  // Copy the remaining elements of L[], if there are any
+  while (i < n1) {
+      strcpy(keys[k], L[i]);
+      strcpy(values[k], Lval[i]);
+      i++;
+      k++;
+  }
+
+  // Copy the remaining elements of R[], if there are any
+  while (j < n2) {
+      strcpy(keys[k], R[j]);
+      strcpy(values[k], Rval[j]);
+      j++;
+      k++;
+  }
+}
+
+// l is for left index and r is right index of the
+// sub-array of arr to be sorted
+void mergeSort(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t l, size_t r){
+  if (l < r) {
+    size_t m = l + (r - l) / 2;
+
+    // Sort first and second halves
+    mergeSort(keys, values, l, m);
+    mergeSort(keys, values, m + 1, r);
+
+    merge(keys, values, l, m, r);
+  }
+}
 
 /// Compares two table keys.
 /// @param key1 
 /// @param key2 
 /// @return 0 if keys are equal.
 int compare_keys(const void* key1, const void *key2){
-  return strcmp((char*) key1, (char*) key2);
+  return strncmp(key1, key2, 1);
 }
 
 /// Calculates a timespec from a delay in milliseconds.
@@ -96,6 +161,7 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
     return 1;
   }
 
+  mergeSort(keys, values, 0, num_pairs-1);
   /** Lock all of received inputs. */
   lock_table_entries(num_pairs, keys);
 
