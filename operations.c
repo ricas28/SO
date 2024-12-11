@@ -135,7 +135,7 @@ int write_buffer(int fd, char *buffer, size_t buffer_size){
   return 0;
 }
 
-void lock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+void wrlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
   /** Array for avoiding locking the same index twice. */
   int locked_indexes[TABLE_SIZE];
 
@@ -143,6 +143,20 @@ void lock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
     /** Index hasn't been tryed to be locked. */
     if(locked_indexes[hash(keys[i])] == 0){
       pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
+      /** Index has now been locked. */
+      locked_indexes[hash(keys[i])] = 1;
+    }
+  }
+}
+
+void rdlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
+  /** Array for avoiding locking the same index twice. */
+  int locked_indexes[TABLE_SIZE];
+
+  for(size_t i = 0; i < num_pairs; i++){
+    /** Index hasn't been tryed to be locked. */
+    if(locked_indexes[hash(keys[i])] == 0){
+      pthread_rwlock_rdlock(&kvs_table->lockTable[hash(keys[i])]);
       /** Index has now been locked. */
       locked_indexes[hash(keys[i])] = 1;
     }
@@ -163,7 +177,7 @@ int kvs_write(size_t num_pairs, char keys[][MAX_STRING_SIZE], char values[][MAX_
 
   mergeSort(keys, values, 0, num_pairs-1);
   /** Lock all of received inputs. */
-  lock_table_entries(num_pairs, keys);
+  wrlock_table_entries(num_pairs, keys);
 
   for (size_t i = 0; i < num_pairs; i++) {
     if (write_pair(kvs_table, keys[i], values[i]) != 0) {
@@ -182,12 +196,11 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     fprintf(stderr, "KVS state must be initialized\n");
     return 1;
   }
-
-  /** Lock all of received inputs. */
-  lock_table_entries(num_pairs, keys);
-
   /** Sort the keys. */
   qsort(keys, num_pairs, sizeof(keys[0]), compare_keys);
+  
+  /** Lock all of received inputs. */
+  rdlock_table_entries(num_pairs, keys);
 
   write(fd, "[", 1*sizeof(char));
   for (size_t i = 0; i < num_pairs; i++) {
@@ -220,12 +233,12 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
     return 1;
   }
   int aux = 0;
-
-  /** Lock all of received inputs. */
-  lock_table_entries(num_pairs, keys);
-
+  
   /** Sort the keys. */
   qsort(keys, num_pairs, sizeof(keys[0]), compare_keys);
+  
+  /** Lock all of received inputs. */
+  wrlock_table_entries(num_pairs, keys);
 
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
