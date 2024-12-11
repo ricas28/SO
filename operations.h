@@ -3,6 +3,9 @@
 
 #include <stddef.h>
 
+/// Compares two keys
+int compare_keys(const char* a, const char* b);
+
 /// Initializes the KVS state.
 /// @return 0 if the KVS state was initialized successfully, 1 otherwise.
 int kvs_init();

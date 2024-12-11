@@ -14,6 +14,15 @@
 static struct HashTable* kvs_table = NULL;
 
 
+
+/// Compares two table keys.
+/// @param key1 
+/// @param key2 
+/// @return 0 if keys are equal.
+int compare_keys(const void* key1, const void *key2){
+  return strcmp((char*) key1, (char*) key2);
+}
+
 /// Calculates a timespec from a delay in milliseconds.
 /// @param delay_ms Delay in milliseconds.
 /// @return Timespec with the given delay.
@@ -111,6 +120,9 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
   /** Lock all of received inputs. */
   lock_table_entries(num_pairs, keys);
 
+  /** Sort the keys. */
+  qsort(keys, num_pairs, sizeof(keys[0]), compare_keys);
+
   write(fd, "[", 1*sizeof(char));
   for (size_t i = 0; i < num_pairs; i++) {
     // strlen("(,KVSERROR)") = 11
@@ -146,6 +158,9 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
   /** Lock all of received inputs. */
   lock_table_entries(num_pairs, keys);
 
+  /** Sort the keys. */
+  qsort(keys, num_pairs, sizeof(keys[0]), compare_keys);
+
   for (size_t i = 0; i < num_pairs; i++) {
     if (delete_pair(kvs_table, keys[i]) != 0) {
       if (!aux) {
@@ -169,6 +184,7 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
 }
 
 void kvs_show(int fd) {
+  /** Lock the hashtable to read. */
   for (size_t i = 0; i < TABLE_SIZE; i++)
     pthread_rwlock_rdlock(&kvs_table->lockTable[i]);
 
@@ -188,6 +204,7 @@ void kvs_show(int fd) {
     }
   }
 
+  /** Unlock the hashtable. */
   for (size_t i = 0; i < TABLE_SIZE; i++)
     pthread_rwlock_unlock(&kvs_table->lockTable[i]);
 }

@@ -40,7 +40,7 @@ int write_pair(HashTable *ht, const char *key, const char *value) {
     }
 
     // Key not found, create a new key node
-    keyNode = malloc(sizeof(KeyNode));
+    keyNode = malloc(sizeof(KeyNode));  
     keyNode->key = strdup(key); // Allocate memory for the key
     keyNode->value = strdup(value); // Allocate memory for the value
     keyNode->next = ht->table[index]; // Link to existing nodes
