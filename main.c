@@ -148,10 +148,9 @@ void *process_file(void *arg){
 }
 
 int main(int argc, char** argv) {
-  const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
-  size_t backups_left = MAX_BACKUPS;
-  const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
-  pthread_t threads[MAX_THREADS];
+  size_t MAX_BACKUPS;
+  size_t backups_left;
+  size_t MAX_THREADS;
   pthread_mutex_t backup_mutex;
   size_t threads_index = 0;
   DIR* pDir;
@@ -165,6 +164,10 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Insufficient number of arguments. Use: %s <directory path> <max number of backups> <max number of threads>\n", argv[0]);
     return -1;
   }
+  MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
+  MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
+  backups_left = MAX_BACKUPS;
+  pthread_t threads[MAX_THREADS];
   size_t directory_size = strlen(argv[1]);
   
   if((pDir = opendir(argv[1])) == NULL){
