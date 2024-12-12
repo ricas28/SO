@@ -13,7 +13,7 @@ endif
 all: kvs
 
 kvs: main.c constants.h operations.o parser.o kvs.o File.o
-	$(CC) $(CFLAGS) $(SLEEP) -o kvs main.c operations.o parser.o kvs.o File.o
+	$(CC) $(CFLAGS) $(SLEEP) -o kvs main.c operations.o parser.o kvs.o File.o -lpthread
 
 %.o: %.c %.h
 	$(CC) $(CFLAGS) -c ${@:.o=.c}
