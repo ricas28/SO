@@ -108,7 +108,8 @@ void *process_file(void *arg){
         break;
 
       case CMD_BACKUP:
-        if (kvs_backup(file_directory, &backups_done, thread_data->backups_left, thread_data->backup_mutex)) { 
+        if (kvs_backup(file_directory, &backups_done, thread_data->backups_left, 
+                                                      thread_data->backup_mutex)) { 
           fprintf(stderr,"Failed to perform backup.\n");
         }
         break;
@@ -117,7 +118,7 @@ void *process_file(void *arg){
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
 
-      case CMD_HELP:
+      case CMD_HELP:{
         char buffer[] = 
             "Available commands:\n"
             "  WRITE [(key,value)(key2,value2),...]\n"
@@ -128,9 +129,8 @@ void *process_file(void *arg){
             "  BACKUP\n" 
             "  HELP\n";
         write_buffer(write_fd, buffer, strlen(buffer));
-
         break;
-        
+      }
       case CMD_EMPTY:
         break;
       case EOC:
