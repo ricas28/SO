@@ -294,11 +294,6 @@ void kvs_show(int fd) {
 /// @return File descriptor for new backup file.
 int create_backup_file(char file_name[], size_t backup_number){
   size_t length = strlen(file_name);
-  /** We only want to keep the actual file name, instead of the ".job". */
-  char job_file_name[length - 3]; 
-  strncpy(job_file_name, file_name, length-4);
-  job_file_name[length-4] = '\0';
-
   /** Calculate length of backup_number. */
   size_t numsize = 0;
   for (size_t backup_number_copy = backup_number; backup_number_copy > 0; backup_number_copy/=10)
@@ -307,11 +302,12 @@ int create_backup_file(char file_name[], size_t backup_number){
   /** Create a buffer for sufix of file name.. */
   /** strlen("-.bck") = 5 */
   char buffer[numsize + 5*sizeof(char) + 1];
+  buffer[numsize + 5*sizeof(char)] = '\0';
   snprintf(buffer, sizeof(buffer), "-%zd.bck", backup_number);
 
   /** Create a "string" that can hold the whole backup file's name.*/
   char new_file_name[length - 4 + numsize + 5*sizeof(char) + 1]; 
-  strncpy(new_file_name, job_file_name, length - 4); 
+  strncpy(new_file_name, file_name, length - 4); 
   new_file_name[length - 4] = '\0';
   strncat(new_file_name, buffer, numsize + 5*sizeof(char)); 
 
@@ -348,11 +344,12 @@ int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pth
     if(fd < 0){
       fprintf(stderr, "Failure creating backup %zd for file \"%s\"\n", 
           *backups_done,file_name);
-      exit(EXIT_FAILURE);
+      _exit(EXIT_FAILURE);
     }
     /** Copy info of KVS. */
     kvs_show(fd);
-    exit(EXIT_SUCCESS);
+    close(fd);
+    _exit(EXIT_SUCCESS);
   }
   /** Parent. */
   else{

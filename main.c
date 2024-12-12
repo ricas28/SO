@@ -32,7 +32,6 @@ void *process_file(void *arg){
   char file_directory[get_path_size(thread_data->file)];
   snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(thread_data->file), 
                                                             get_file_name(thread_data->file));
-  printf("A analisar %s\n", file_directory);
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -127,8 +126,7 @@ void *process_file(void *arg){
             "  SHOW\n"
             "  WAIT <delay_ms>\n"
             "  BACKUP\n" 
-            "  HELP\n"
-        ;
+            "  HELP\n";
         write_buffer(write_fd, buffer, strlen(buffer));
 
         break;
@@ -136,7 +134,7 @@ void *process_file(void *arg){
       case CMD_EMPTY:
         break;
       case EOC:
-        /** Close input and output file*/
+        /** Close input and output file. */
         close(read_fd);
         close(write_fd);
         free(thread_data->file);
@@ -201,17 +199,12 @@ int main(int argc, char** argv) {
     pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread);
     threads_index++;
   }
-  /** Wait for all backups that might not have finished. */
-  int status;
-  for(size_t i = 0; i < MAX_BACKUPS; i++)
-    wait(&status);
   /** Wait for all threads. */
-  size_t limit = threads_index > MAX_THREADS ?  MAX_THREADS : threads_index;
-  for(size_t i = 0; i < limit; i++)
+  for(size_t i = 0; i < MAX_THREADS && i < threads_index; i++){
     pthread_join(threads[i], NULL);
+  }
   /** Destroy backup mutex. */
   pthread_mutex_destroy(&backup_mutex);
-  
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
