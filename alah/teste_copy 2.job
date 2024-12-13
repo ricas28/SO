@@ -9,4 +9,5 @@
 SHOW
 # WRITE [(c1,v1)(c2,v2)]
 WRITE [(chave2,valor-exemplo2)(umaChave,umValor)]
+BACKUP
 READ [c1,c2]

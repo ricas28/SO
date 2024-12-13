@@ -43,6 +43,7 @@ void *process_file(void *arg){
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
+    return NULL;
   }
 
   /** Build relative path for the output file. */
@@ -160,6 +161,7 @@ int main(int argc, char** argv) {
   pthread_mutex_t backup_mutex;
   size_t threads_index = 0;
   DIR* pDir;
+  int error = 0;
 
   if (kvs_init()) {
     fprintf(stderr, "Failed to initialize KVS\n");
@@ -182,7 +184,10 @@ int main(int argc, char** argv) {
   }
 
   /** Initialize mutex for backup. */
-  pthread_mutex_init(&backup_mutex, NULL);
+  if(pthread_mutex_init(&backup_mutex, NULL) != 0){
+    fprintf(stderr, "Failed to initialize backup mutex\n");
+    return -1;
+  }
   
   struct dirent* file_dir;
   /** Keep running until there's no files to read. */
@@ -195,30 +200,52 @@ int main(int argc, char** argv) {
           /** Go to the next file. */
           continue;
       
-    Thread_data *new_thread = (Thread_data *)malloc(sizeof(Thread_data));
+    Thread_data *new_thread;
+    if((new_thread = (Thread_data *)malloc(sizeof(Thread_data))) == NULL){
+      fprintf(stderr, "Failed to allocate memory for new thread struct.\n");
+      error = 1;
+      break;
+    }
     new_thread->backups_left = &backups_left;
     /** Create a new File. */
-    new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
+    if((new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name)) == NULL){ 
+      error = 1;                                                                                     
+      break;
+    }
     new_thread->backup_mutex = &backup_mutex;
 
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
       /** Wait for a thread to finish. */
-      pthread_join(threads[threads_index % MAX_THREADS], NULL);
+      if(pthread_join(threads[threads_index % MAX_THREADS], NULL) != 0){
+        fprintf(stderr, "Failed to join thread.\n");
+        error = 1;
+        break;
+      }
     }
     /** Create a new thread. */
-    pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread);
+    if(pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread) != 0){
+      fprintf(stderr, "Failed to create a thread.\n");
+      error = 1;
+      break;
+    }
     threads_index++;
   }
 
   /** Wait for all threads to finish. */
   for(size_t i = 0; i < MAX_THREADS && i < threads_index; i++){
-    pthread_join(threads[i], NULL);
+    if(pthread_join(threads[i], NULL) != 0){
+      fprintf(stderr, "Failed to join thread.\n");
+      error = 1;
+      break;
+    }
   }
   /** Destroy backup mutex. */
   pthread_mutex_destroy(&backup_mutex);
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
+  /** Somewhere on the program something went wrong. */
+  if(error == 1) return -1;
   return 0;
 }

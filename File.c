@@ -7,7 +7,11 @@
 #include "File.h"
 
 File *new_file(size_t path_size, char *directory_path, char *name){
-    File *new_file = (File *)malloc(sizeof(File));
+    File *new_file;
+    if((new_file = (File *)malloc(sizeof(File))) == NULL){
+        fprintf(stderr, "Failed to allocate memory for a new file struct.\n");
+        return NULL;
+    }
     /** Give atributtes. */
     new_file->path_size = path_size;
     strcpy(new_file->directory_path, directory_path);

@@ -8,6 +8,6 @@
 # DELETE [c1,chaveAleatoria]
 # Impressão de toda a tabela 
 SHOW
-BACKUP
 WRITE [(c1,v1)(c2,v2)(c4,v3)(b3,v4)(b5,v7)]
+BACKUP
 READ [c1,c2,b3,b5,c4]
