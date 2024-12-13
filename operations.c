@@ -136,30 +136,14 @@ int write_buffer(int fd, char *buffer, size_t buffer_size){
 }
 
 void wrlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
-  /** Array for avoiding locking the same index twice. */
-  int locked_indexes[TABLE_SIZE];
-
   for(size_t i = 0; i < num_pairs; i++){
-    /** Index hasn't been tryed to be locked. */
-    if(locked_indexes[hash(keys[i])] == 0){
-      pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
-      /** Index has now been locked. */
-      locked_indexes[hash(keys[i])] = 1;
-    }
+    pthread_rwlock_wrlock(&kvs_table->lockTable[hash(keys[i])]);
   }
 }
 
 void rdlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]){
-  /** Array for avoiding locking the same index twice. */
-  int locked_indexes[TABLE_SIZE];
-
   for(size_t i = 0; i < num_pairs; i++){
-    /** Index hasn't been tryed to be locked. */
-    if(locked_indexes[hash(keys[i])] == 0){
-      pthread_rwlock_rdlock(&kvs_table->lockTable[hash(keys[i])]);
-      /** Index has now been locked. */
-      locked_indexes[hash(keys[i])] = 1;
-    }
+    pthread_rwlock_rdlock(&kvs_table->lockTable[hash(keys[i])]);
   }
 }
 
@@ -217,12 +201,12 @@ int kvs_read(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd) {
       write_buffer(fd, buffer,  strlen(keys[i]) + strlen(result) + 3*sizeof(char));
     }
     free(result);
-    
   }
   write(fd, "]\n", 2*sizeof(char));
 
   /** Unlock all of received inputs. */
   unlock_table_entries(num_pairs, keys);
+  
 
   return 0;
 }
@@ -284,8 +268,9 @@ void kvs_show(int fd) {
   }
 
   /** Unlock the hashtable. */
-  for (size_t i = 0; i < TABLE_SIZE; i++)
+  for (size_t i = 0; i < TABLE_SIZE; i++){
     pthread_rwlock_unlock(&kvs_table->lockTable[i]);
+  }
 }
 
 /// Opens a backup file and returns it's file descriptor.
