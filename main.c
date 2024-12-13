@@ -19,6 +19,9 @@ typedef struct Thread_data{
   File *file;
 }Thread_data;
 
+/// Processes every command on a file.
+/// @param arg pointer to arguments needed for making in and out file.
+/// @return NULL
 void *process_file(void *arg){
   Thread_data *thread_data = (Thread_data *)arg;
   char keys[MAX_WRITE_SIZE][MAX_STRING_SIZE] = {0};
@@ -30,8 +33,13 @@ void *process_file(void *arg){
 
   /** Build relative path of file. */
   char file_directory[get_path_size(thread_data->file)];
-  snprintf(file_directory, sizeof(file_directory), "%s/%s", get_file_directory(thread_data->file), 
-                                                            get_file_name(thread_data->file));
+  if(snprintf(file_directory, sizeof(file_directory), "%s/%s", 
+                                get_file_directory(thread_data->file), 
+                                get_file_name(thread_data->file)) == -1){
+    fprintf(stderr, "Failure to create file path.\n");
+    return NULL;
+  }
+                                                      
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);
@@ -64,7 +72,6 @@ void *process_file(void *arg){
         if (kvs_write(num_pairs, keys, values)) {
           fprintf(stderr, "Failed to write pair\n");
         }
-
         break;
 
       case CMD_READ:
@@ -102,7 +109,8 @@ void *process_file(void *arg){
 
         if (delay > 0) {
           char message[] = "Waiting...\n";
-          write(write_fd, message, sizeof(message) - 1);
+          if(write(write_fd, message, sizeof(message) - 1) == -1)
+            fprintf(stderr, "Failure writing WAIT message");
           kvs_wait(delay);
         }
         break;
@@ -175,6 +183,7 @@ int main(int argc, char** argv) {
 
   /** Initialize mutex for backup. */
   pthread_mutex_init(&backup_mutex, NULL);
+  
   struct dirent* file_dir;
   /** Keep running until there's no files to read. */
   while ((file_dir = readdir(pDir)) != NULL) {
@@ -183,6 +192,7 @@ int main(int argc, char** argv) {
     if(!(file_name_size > 4 && file_dir->d_name[file_name_size-1] == 'b' && 
         file_dir->d_name[file_name_size-2] == 'o' && file_dir->d_name[file_name_size-3] == 'j' && 
         file_dir->d_name[file_name_size-4] == '.'))
+          /** Go to the next file. */
           continue;
       
     Thread_data *new_thread = (Thread_data *)malloc(sizeof(Thread_data));
@@ -190,6 +200,7 @@ int main(int argc, char** argv) {
     /** Create a new File. */
     new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name);
     new_thread->backup_mutex = &backup_mutex;
+
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
       /** Wait for a thread to finish. */
@@ -199,7 +210,8 @@ int main(int argc, char** argv) {
     pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread);
     threads_index++;
   }
-  /** Wait for all threads. */
+
+  /** Wait for all threads to finish. */
   for(size_t i = 0; i < MAX_THREADS && i < threads_index; i++){
     pthread_join(threads[i], NULL);
   }
