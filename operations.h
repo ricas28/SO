@@ -3,8 +3,42 @@
 
 #include <stddef.h>
 
-/// Compares two keys
-int compare_keys(const char* a, const char* b);
+/// Compares two keys.
+/// @param key1 
+/// @param key2 
+/// @return 0 if keys are equal.
+int compare_keys(const void* key1, const void* key2);
+
+/// Merges two arrays.
+/// @param keys
+/// @param values
+/// @param l
+/// @param m
+/// @param r
+void merge(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t l, size_t m, size_t r);
+
+/// l is for left index and r is right index of the
+/// sub-array of arr to be sorted.
+/// @param keys
+/// @param values
+/// @param l 
+/// @param r
+void mergeSort(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t l, size_t r);
+
+/// Lock all table entries with a write lock.
+/// @param num_pairs 
+/// @param keys
+void wrlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
+
+/// Lock all table entries with a read lock.
+/// @param num_pairs 
+/// @param keys
+void rdlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
+
+/// Unlock all table entries.
+/// @param num_pairs 
+/// @param keys
+void unlock_talbe_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
 
 /// Initializes the KVS state.
 /// @return 0 if the KVS state was initialized successfully, 1 otherwise.
@@ -38,6 +72,12 @@ int kvs_delete(size_t num_pairs, char keys[][MAX_STRING_SIZE], int fd);
 /// Writes the state of the KVS.
 /// @param fd File descriptor to write the output.
 void kvs_show(int fd);
+
+/// Opens a backup file and returns it's file descriptor.
+/// @param file_name Name of the .job file.
+/// @param backup_number Number of the backup being done.
+/// @return File descriptor for new backup file.
+int create_backup_file(char file_name[], size_t backup_number);
 
 /// Creates a backup of the KVS state and stores it in the correspondent
 /// backup file

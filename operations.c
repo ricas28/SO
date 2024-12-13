@@ -66,8 +66,6 @@ void merge(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t 
   }
 }
 
-// l is for left index and r is right index of the
-// sub-array of arr to be sorted
 void mergeSort(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], size_t l, size_t r){
   if (l < r) {
     size_t m = l + (r - l) / 2;
@@ -80,10 +78,6 @@ void mergeSort(char keys[][MAX_STRING_SIZE], char values[][MAX_STRING_SIZE], siz
   }
 }
 
-/// Compares two table keys.
-/// @param key1 
-/// @param key2 
-/// @return 0 if keys are equal.
 int compare_keys(const void* key1, const void *key2){
   return strncmp(key1, key2, 1);
 }
@@ -273,10 +267,6 @@ void kvs_show(int fd) {
   }
 }
 
-/// Opens a backup file and returns it's file descriptor.
-/// @param file_name Name of the .job file.
-/// @param backup_number Number of the backup being done.
-/// @return File descriptor for new backup file.
 int create_backup_file(char file_name[], size_t backup_number){
   size_t length = strlen(file_name);
   /** Calculate length of backup_number. */
