@@ -39,7 +39,7 @@ void *process_file(void *arg){
     fprintf(stderr, "Failure to create file path.\n");
     return NULL;
   }
-                                                      
+                                              
   /** Open input file. */
   if ((read_fd = open(file_directory, O_RDONLY)) == -1) {
     fprintf(stderr, "Error opening read file: %s\n", file_directory);

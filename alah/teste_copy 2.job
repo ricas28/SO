@@ -1,13 +1,3 @@
-# READ [c1]
-# Criação e escrita de 2 chaves 
-# WRITE [(c1,v1)(chave2,valor-exemplo)]
-# Leitura de chave existente 
-# READ [chave2]
-# Escrita de uma chave nova e outra existente 
-# DELETE [c1,chaveAleatoria]
-# Impressão de toda a tabela 
-SHOW
-# WRITE [(c1,v1)(c2,v2)]
 WRITE [(chave2,valor-exemplo2)(umaChave,umValor)]
 BACKUP
 READ [c1,c2]
