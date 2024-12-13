@@ -209,6 +209,7 @@ int main(int argc, char** argv) {
     new_thread->backups_left = &backups_left;
     /** Create a new File. */
     if((new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name)) == NULL){ 
+      free(new_thread);
       error = 1;                                                                                     
       break;
     }
@@ -226,6 +227,7 @@ int main(int argc, char** argv) {
     /** Create a new thread. */
     if(pthread_create(&threads[threads_index % MAX_THREADS], NULL, process_file, (void*) new_thread) != 0){
       fprintf(stderr, "Failed to create a thread.\n");
+      free(new_thread);
       error = 1;
       break;
     }
@@ -245,7 +247,7 @@ int main(int argc, char** argv) {
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
-  /** Somewhere on the program something went wrong. */
+  /** Something went wrong during the program.. */
   if(error == 1) return -1;
   return 0;
 }
