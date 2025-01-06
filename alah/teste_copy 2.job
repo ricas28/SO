@@ -1,3 +1,0 @@
-WRITE [(chave2,valor-exemplo2)(umaChave,umValor)]
-BACKUP
-READ [c1,c2]
