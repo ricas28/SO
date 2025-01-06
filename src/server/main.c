@@ -251,8 +251,17 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Failed to initialize backup mutex\n");
     error = 1;
   }
-  
-  error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir);
+
+  /** Open register FIFO. */
+  if (mkfifo(argv[4], 0666) == -1) {
+    fprintf(stderr, "Failure creating register FIFO.");
+    error = 1;
+  }
+
+  /** TODO criar tarefa anfintriã (esperar pedidos de registos) */
+  if (error != 1){
+    error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir);
+  }
 
   /** Ending program. */
   kvs_terminate();
