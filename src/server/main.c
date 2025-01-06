@@ -224,10 +224,52 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
   return error;
 }
 
+int create_host_thread(const char* fifo_name){
+  int fifo_fd;
+  int error = 0;
+  /** Open pipe for reading,
+   * This waits for someone to open it for writing.
+   */
+  fifo_fd = open(fifo_name, O_RDONLY); // opens register_fifo
+  if (fifo_fd == -1) {
+    fprintf(stderr, "Failure opening FIFO.\n");
+    error = 1;
+  }
+  
+  while (error == 0) {
+    char buffer[MAX_REGISTER_MSG];
+    ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG - 1);
+    
+    // EOF.
+    if (ret == 0){
+      fprintf(stderr, "pipe closed.\n");
+      break;
+    }
+    // something went wrong. :(
+    else if (ret == -1){
+      fprintf(stderr, "Error ocurred while reading from pipe.\n");
+      error = 1;
+    }
+
+    fprintf(stderr, "received %zd Bites.\n", ret); // How many bites were received.
+
+    /* TODO: create_managing_thread and use what's in the buffer
+    * (The names of the FIFO's the managing thread should create)
+    */
+    fputs(buffer, stdout); // See what the buffer has (temporary).
+  }
+  
+  close(fifo_fd);
+  return error;
+}
+
+
 int main(int argc, char** argv) {
   pthread_mutex_t backup_mutex;
   DIR* pDir;
   int error;
+  int fifo_fd;
+  // int managing_threads_number = 0;
 
   if (kvs_init()) {
     fprintf(stderr, "Failed to initialize KVS\n");
@@ -240,25 +282,35 @@ int main(int argc, char** argv) {
   }
   const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
+
+  // pthread_t managing_threads[MAX_THREADS];
   
   if((pDir = opendir(argv[1])) == NULL){
-    fprintf(stderr, "Failed to open directory\n");
+    fprintf(stderr, "Failed to open directory.\n");
     error = 1;
   }
 
   /** Initialize mutex for backup. */
   if(pthread_mutex_init(&backup_mutex, NULL) != 0){
-    fprintf(stderr, "Failed to initialize backup mutex\n");
+    fprintf(stderr, "Failed to initialize backup mutex.\n");
     error = 1;
   }
 
   /** Open register FIFO. */
-  if (mkfifo(argv[4], 0666) == -1) {
-    fprintf(stderr, "Failure creating register FIFO.");
+  if (mkfifo(argv[4], 0666) != 0) {
+    fprintf(stderr, "Failure creating register FIFO.\n");
     error = 1;
   }
 
-  /** TODO criar tarefa anfintriã (esperar pedidos de registos) */
+  if (create_host_thread(argv[4]) == 1){
+    fprintf(stderr, "Error creating host thread.\n");
+    error = 1;
+  }
+
+  // pthread_create(managing_threads[managing_threads_number++], NULL, create_managing_thread, fifo_fd);
+
+  /** TODO criar tarefa anfintriã (esperar pedidos de registos) -> tarefa anfitriã é a main */
+
   if (error != 1){
     error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir);
   }
