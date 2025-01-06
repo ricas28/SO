@@ -7,6 +7,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <sys/types.h>
 
 #include "constants.h"
 #include "parser.h"
@@ -154,42 +155,14 @@ void *process_file(void *arg){
   return NULL;
 }
 
-int main(int argc, char** argv) {
-  size_t MAX_BACKUPS;
-  size_t backups_left;
-  size_t MAX_THREADS;
-  pthread_mutex_t backup_mutex;
-  size_t threads_index = 0;
-  DIR* pDir;
+int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex, DIR* pDir){
   int error = 0;
-
-  if (kvs_init()) {
-    fprintf(stderr, "Failed to initialize KVS\n");
-    return -1;
-  }
-
-  if(argc < 4){
-    fprintf(stderr, "Insufficient number of arguments. Use: %s <directory path> <max number of backups> <max number of threads>\n", argv[0]);
-    return -1;
-  }
-  MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
-  MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
-  backups_left = MAX_BACKUPS;
-  pthread_t threads[MAX_THREADS];
-  size_t directory_size = strlen(argv[1]);
-  
-  if((pDir = opendir(argv[1])) == NULL){
-    fprintf(stderr, "Failed to open directory\n");
-    return -1;
-  }
-
-  /** Initialize mutex for backup. */
-  if(pthread_mutex_init(&backup_mutex, NULL) != 0){
-    fprintf(stderr, "Failed to initialize backup mutex\n");
-    return -1;
-  }
-  
   struct dirent* file_dir;
+  size_t backups_left = MAX_BACKUPS;
+  size_t threads_index = 0;
+  pthread_t threads[MAX_THREADS];
+  size_t directory_size = strlen(directory_path);
+
   /** Keep running until there's no files to read. */
   while ((file_dir = readdir(pDir)) != NULL) {
     size_t file_name_size = strlen(file_dir->d_name);
@@ -204,16 +177,14 @@ int main(int argc, char** argv) {
     if((new_thread = (Thread_data *)malloc(sizeof(Thread_data))) == NULL){
       fprintf(stderr, "Failed to allocate memory for new thread struct.\n");
       error = 1;
-      break;
     }
     new_thread->backups_left = &backups_left;
     /** Create a new File. */
-    if((new_thread->file = new_file(directory_size + file_name_size + 2, argv[1], file_dir->d_name)) == NULL){ 
+    if((new_thread->file = new_file(directory_size + file_name_size + 2, directory_path, file_dir->d_name)) == NULL){ 
       free(new_thread);
       error = 1;                                                                                     
-      break;
     }
-    new_thread->backup_mutex = &backup_mutex;
+    new_thread->backup_mutex = backup_mutex;
 
     /** Array of threads is full. */
     if(threads_index >= MAX_THREADS){
@@ -239,11 +210,50 @@ int main(int argc, char** argv) {
     if(pthread_join(threads[i], NULL) != 0){
       fprintf(stderr, "Failed to join thread.\n");
       error = 1;
-      break;
     }
   }
+
+  /** Wait for all backups to finish. */
+  while(backups_left < MAX_BACKUPS){
+    wait(NULL);
+    backups_left++;
+  }
+
   /** Destroy backup mutex. */
-  pthread_mutex_destroy(&backup_mutex);
+  pthread_mutex_destroy(backup_mutex);
+  return error;
+}
+
+int main(int argc, char** argv) {
+  pthread_mutex_t backup_mutex;
+  DIR* pDir;
+  int error;
+
+  if (kvs_init()) {
+    fprintf(stderr, "Failed to initialize KVS\n");
+    return -1;
+  }
+
+  if(argc < 5){
+    fprintf(stderr, "Usage: %s <directory path> <max backups> <max threads> <pipe name>\n", argv[0]);
+    return -1;
+  }
+  const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
+  const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
+  
+  if((pDir = opendir(argv[1])) == NULL){
+    fprintf(stderr, "Failed to open directory\n");
+    error = 1;
+  }
+
+  /** Initialize mutex for backup. */
+  if(pthread_mutex_init(&backup_mutex, NULL) != 0){
+    fprintf(stderr, "Failed to initialize backup mutex\n");
+    error = 1;
+  }
+  
+  error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir);
+
   /** Ending program. */
   kvs_terminate();
   closedir(pDir);
