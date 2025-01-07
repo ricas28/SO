@@ -55,7 +55,7 @@ int read_string(int fd, char *str) {
 
 int write_all(int fd, const void *buffer, size_t size) {
   size_t bytes_written = 0;
-  while (bytes_written <= size) {
+  while (bytes_written < size) {
     ssize_t result = write(fd, buffer + bytes_written, size - bytes_written);
     if (result == -1) {
       if (errno == EINTR) {

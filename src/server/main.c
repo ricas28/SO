@@ -15,6 +15,7 @@
 #include "operations.h"
 #include "File.h"
 #include "src/common/constants.h"
+#include "src/common/io.h"
 
 typedef struct Thread_data{
   pthread_mutex_t *backup_mutex;
@@ -240,6 +241,8 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
  
 void* managing_thread_fn(void *arg){
   Managing_thread *managing_thread = (Managing_thread *)arg;
+
+
   free(managing_thread);
   return NULL;
 }
@@ -248,10 +251,8 @@ void* host_thread_fn(void* arg){
   const char* fifo_name = (const char*) arg;
   int fifo_fd, error = 0, active_sessions = 0;
   pthread_t client_threads[MAX_SESSION_COUNT];
-  /** Open pipe for reading,
-   * This waits for someone to open it for writing.
-   */
-  fifo_fd = open(fifo_name, O_RDONLY); // opens register_fifo
+  /** Open register FIFO for reading */
+  fifo_fd = open(fifo_name, O_RDONLY); 
   if (fifo_fd == -1) {
     fprintf(stderr, "Failure opening FIFO.\n");
     error = 1;
@@ -259,36 +260,61 @@ void* host_thread_fn(void* arg){
   
   while (error == 0) {
     char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
-    ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG);
+    int intr;
+    ssize_t ret;
 
+    if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, &intr)) == -1){
+      fprintf(stderr, "Failure reading from register FIFO.\n");
+      error = 1;
+    }
     /** Nothing useful was read. */
     if (ret <= 1 && (buffer[0] == '\n')) { 
       free(buffer);
       continue;
     }
-    
-    // EOF.
+    /** EOF. */
     if (ret == 0){
-      fprintf(stderr, "pipe closed.\n");
+      fprintf(stderr, "Pipe closed.\n");
+      free(buffer);
       break;
-    }
-    // something went wrong. :(
-    else if (ret == -1){
-      fprintf(stderr, "Error ocurred while reading from pipe.\n");
-      error = 1;
     }
 
     /** New managing thread. */
-    Managing_thread *new_thread = (Managing_thread *)malloc(sizeof(Managing_thread));
-    /** Start at the pipe's names. */
-    strncpy(new_thread->req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
-    strncpy(new_thread->rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
-    strncpy(new_thread->notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
-
-    if(pthread_create(&client_threads[active_sessions], NULL, managing_thread_fn, (void *)new_thread) != 0){
-      fprintf(stderr, "Failure creating managing thread.\n");
+    Managing_thread *new_thread;
+    if((new_thread = (Managing_thread *)malloc(sizeof(Managing_thread))) == NULL){
+      fprintf(stderr, "Failure to alocate memory for managing thread.\n");
+      error = 1;
     }
-      
+    if(error == 0){
+      /** Separate the different pipes. */
+      strncpy(new_thread->req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
+      strncpy(new_thread->rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
+      strncpy(new_thread->notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
+    }
+
+    if(pthread_create(&client_threads[active_sessions++], NULL, managing_thread_fn, (void *)new_thread) != 0){
+      fprintf(stderr, "Failure creating managing thread.\n");
+      error = 1;
+    }
+
+    int rep_pipe;
+    if ((rep_pipe = open(new_thread->rep_pipe, O_WRONLY)) == -1){
+      fprintf(stderr, "Failure opening response FIFO.\n");
+      free(buffer);
+      /** If FIFO wasn't opened just quit. */
+      break;
+    }
+    /** If this code is reached, there were no erros during connect. */
+    if(error == 0){
+      if(write_all(rep_pipe, "10", 2) == -1)
+        fprintf(stderr, "Failure writing success mensage for connect.\n");
+    }
+    else{
+      if(write_all(rep_pipe, "11", 2) == -1)
+        fprintf(stderr, "Failure writing error mensage for connect.\n");
+    }
+    
+    close(rep_pipe);  
     free(buffer);
   }
   
