@@ -42,14 +42,13 @@ int kvs_connect(const char* req_pipe_path, const char *resp_pipe_path,
   */
   for(size_t i = req_pipe_size + 1; i <= MAX_PIPE_PATH_LENGTH; i++)
     buffer[i] = '\0';
-  printf("%s\n",buffer);
 
-  strncat(buffer, resp_pipe_path, resp_pipe_size);
+  strncpy(buffer + MAX_PIPE_PATH_LENGTH + 1, resp_pipe_path, resp_pipe_size);
 
   for(size_t i = MAX_PIPE_PATH_LENGTH + resp_pipe_size + 1; i <= MAX_PIPE_PATH_LENGTH*2; i++)
     buffer[i] = '\0';
 
-  strncat(buffer, notif_pipe_path, notif_pipe_size);
+  strncpy(buffer + MAX_PIPE_PATH_LENGTH*2 + 1, notif_pipe_path, notif_pipe_size);
 
   for(size_t i = MAX_PIPE_PATH_LENGTH*2 + notif_pipe_size + 1; i <= MAX_PIPE_PATH_LENGTH*3; i++)
     buffer[i] = '\0';

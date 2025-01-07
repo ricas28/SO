@@ -14,6 +14,7 @@
 #include "parser.h"
 #include "operations.h"
 #include "File.h"
+#include "src/common/constants.h"
 
 typedef struct Thread_data{
   pthread_mutex_t *backup_mutex;
@@ -156,7 +157,8 @@ void *process_file(void *arg){
   return NULL;
 }
 
-int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex, DIR* pDir){
+int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex,
+                      DIR* pDir, pthread_t host_thread){
   int error = 0;
   struct dirent* file_dir;
   size_t backups_left = MAX_BACKUPS;
@@ -214,6 +216,11 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
     }
   }
 
+  if (pthread_join(host_thread, NULL) != 0){
+    fprintf(stderr, "Failed to join host thread.\n");
+    error = 1;
+  }
+
   /** Wait for all backups to finish. */
   while(backups_left < MAX_BACKUPS){
     wait(NULL);
@@ -225,7 +232,21 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
   return error;
 }
 
-void* create_host_thread(const char* fifo_name){
+void copy_pipe_name(char* dest, char* bufa, int* i){
+  int j = 0;
+  int f = *i;
+  while (j < MAX_PIPE_PATH_LENGTH){
+    if (bufa[(*i)++] == '\0'){
+      dest[j] = '\0';
+      *i = f + MAX_PIPE_PATH_LENGTH + 1;
+      break;
+    }
+    dest[j++] = bufa[(*i)++];
+  }
+}
+
+void* create_host_thread(void* arg){
+  const char* fifo_name = (const char*) arg;
   int fifo_fd;
   int error = 0;
   /** Open pipe for reading,
@@ -238,7 +259,7 @@ void* create_host_thread(const char* fifo_name){
   }
   
   while (error == 0) {
-    char buffer[MAX_REGISTER_MSG];
+    char *buffer = (char*) malloc(MAX_REGISTER_MSG*sizeof(char));
     ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG - 1);
 
     /** Nothing useful was read. */
@@ -257,22 +278,34 @@ void* create_host_thread(const char* fifo_name){
       error = 1;
     }
 
-    /* TODO: create_managing_thread and use what's in the buffer
-    * (The names of the FIFO's the managing thread should create)
-    */
+    char req_pipe[MAX_PIPE_PATH_LENGTH];
+    char rep_pipe[MAX_PIPE_PATH_LENGTH];
+    char notif_pipe[MAX_PIPE_PATH_LENGTH];
+
+    /** Start at the pipe's names. */
+    strncpy(req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
+    strncpy(rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
+    strncpy(notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
+
+    printf("%s\n%s\n%s\n", req_pipe, rep_pipe, notif_pipe);
+    // create_managing_thread(req_pipe, rep_pipe, notif_pipe);
     printf("recebi %s\n", buffer); // See what the buffer has (temporary).
+    free(buffer);
   }
   
   close(fifo_fd);
-  return error;
+  return NULL;
 }
 
+void* create_managing_thread(char* req_pipe, char* rep_pipe, char* notif_pipe){
+  return NULL;
+}
 
 int main(int argc, char** argv) {
   pthread_mutex_t backup_mutex;
   DIR* pDir;
   int error;
-  // int managing_threads_number = 0;
+  pthread_t host_thread;
 
   if (kvs_init()) {
     fprintf(stderr, "Failed to initialize KVS\n");
@@ -307,17 +340,14 @@ int main(int argc, char** argv) {
     error = 1;
   }
 
-  if (create_host_thread(argv[4]) == 1){
+  if (pthread_create(&host_thread, NULL, create_host_thread, argv[4]) == 1){
     fprintf(stderr, "Error creating host thread.\n");
     error = 1;
   }
 
-  // pthread_create(managing_threads[managing_threads_number++], NULL, create_managing_thread, fifo_fd);
-
-  /** TODO criar tarefa anfintriã (esperar pedidos de registos) -> tarefa anfitriã é a main */
 
   if (error != 1){
-    error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir);
+    error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir, host_thread);
   }
 
   /** Ending program. */
