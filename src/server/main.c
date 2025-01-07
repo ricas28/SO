@@ -22,6 +22,12 @@ typedef struct Thread_data{
   File *file;
 }Thread_data;
 
+typedef struct Managing_thread{
+      char req_pipe[MAX_PIPE_PATH_LENGTH];
+      char rep_pipe[MAX_PIPE_PATH_LENGTH];
+      char notif_pipe[MAX_PIPE_PATH_LENGTH];
+}Managing_thread;
+
 /// Processes every command on a file.
 /// @param arg pointer to arguments needed for making in and out file.
 /// @return NULL
@@ -231,24 +237,17 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
   pthread_mutex_destroy(backup_mutex);
   return error;
 }
-
-void copy_pipe_name(char* dest, char* bufa, int* i){
-  int j = 0;
-  int f = *i;
-  while (j < MAX_PIPE_PATH_LENGTH){
-    if (bufa[(*i)++] == '\0'){
-      dest[j] = '\0';
-      *i = f + MAX_PIPE_PATH_LENGTH + 1;
-      break;
-    }
-    dest[j++] = bufa[(*i)++];
-  }
+ 
+void* managing_thread_fn(void *arg){
+  Managing_thread *managing_thread = (Managing_thread *)arg;
+  free(managing_thread);
+  return NULL;
 }
 
-void* create_host_thread(void* arg){
+void* host_thread_fn(void* arg){
   const char* fifo_name = (const char*) arg;
-  int fifo_fd;
-  int error = 0;
+  int fifo_fd, error = 0, active_sessions = 0;
+  pthread_t client_threads[MAX_SESSION_COUNT];
   /** Open pipe for reading,
    * This waits for someone to open it for writing.
    */
@@ -259,11 +258,12 @@ void* create_host_thread(void* arg){
   }
   
   while (error == 0) {
-    char *buffer = (char*) malloc(MAX_REGISTER_MSG*sizeof(char));
-    ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG - 1);
+    char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
+    ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG);
 
     /** Nothing useful was read. */
-    if(strcmp(buffer, "\n") == 0){
+    if (ret <= 1 && (buffer[0] == '\n')) { 
+      free(buffer);
       continue;
     }
     
@@ -278,26 +278,25 @@ void* create_host_thread(void* arg){
       error = 1;
     }
 
-    char req_pipe[MAX_PIPE_PATH_LENGTH];
-    char rep_pipe[MAX_PIPE_PATH_LENGTH];
-    char notif_pipe[MAX_PIPE_PATH_LENGTH];
-
+    /** New managing thread. */
+    Managing_thread *new_thread = (Managing_thread *)malloc(sizeof(Managing_thread));
     /** Start at the pipe's names. */
-    strncpy(req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
-    strncpy(rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
-    strncpy(notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
+    strncpy(new_thread->req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
+    strncpy(new_thread->rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
+    strncpy(new_thread->notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
 
-    printf("%s\n%s\n%s\n", req_pipe, rep_pipe, notif_pipe);
-    // create_managing_thread(req_pipe, rep_pipe, notif_pipe);
-    printf("recebi %s\n", buffer); // See what the buffer has (temporary).
+    if(pthread_create(&client_threads[active_sessions], NULL, managing_thread_fn, (void *)new_thread) != 0){
+      fprintf(stderr, "Failure creating managing thread.\n");
+    }
+      
     free(buffer);
   }
   
+  for(int i = 0; i < MAX_SESSION_COUNT; i++){
+    if(pthread_join(client_threads[i], NULL) != 0)
+      fprintf(stderr, "Failure joining %d managing thread\n", i);
+  }
   close(fifo_fd);
-  return NULL;
-}
-
-void* create_managing_thread(char* req_pipe, char* rep_pipe, char* notif_pipe){
   return NULL;
 }
 
@@ -318,8 +317,6 @@ int main(int argc, char** argv) {
   }
   const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
-
-  // pthread_t managing_threads[MAX_THREADS];
   
   if((pDir = opendir(argv[1])) == NULL){
     fprintf(stderr, "Failed to open directory.\n");
@@ -340,7 +337,7 @@ int main(int argc, char** argv) {
     error = 1;
   }
 
-  if (pthread_create(&host_thread, NULL, create_host_thread, argv[4]) == 1){
+  if (pthread_create(&host_thread, NULL, host_thread_fn, argv[4]) == 1){
     fprintf(stderr, "Error creating host thread.\n");
     error = 1;
   }
