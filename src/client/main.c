@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
   strncat(resp_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
   strncat(notif_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
 
-  kvs_connect(req_pipe_path, resp_pipe_path, argv[2], notif_pipe_path);
+  kvs_connect(req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]);
 
   while (1) {
     switch (get_next(STDIN_FILENO)) {

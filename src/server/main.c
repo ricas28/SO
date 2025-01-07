@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include "constants.h"
 #include "parser.h"
@@ -224,7 +225,7 @@ int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREAD
   return error;
 }
 
-int create_host_thread(const char* fifo_name){
+void* create_host_thread(const char* fifo_name){
   int fifo_fd;
   int error = 0;
   /** Open pipe for reading,
@@ -239,6 +240,11 @@ int create_host_thread(const char* fifo_name){
   while (error == 0) {
     char buffer[MAX_REGISTER_MSG];
     ssize_t ret = read(fifo_fd, buffer, MAX_REGISTER_MSG - 1);
+
+    /** Nothing useful was read. */
+    if(strcmp(buffer, "\n") == 0){
+      continue;
+    }
     
     // EOF.
     if (ret == 0){
@@ -251,12 +257,10 @@ int create_host_thread(const char* fifo_name){
       error = 1;
     }
 
-    fprintf(stderr, "received %zd Bites.\n", ret); // How many bites were received.
-
     /* TODO: create_managing_thread and use what's in the buffer
     * (The names of the FIFO's the managing thread should create)
     */
-    fputs(buffer, stdout); // See what the buffer has (temporary).
+    printf("recebi %s\n", buffer); // See what the buffer has (temporary).
   }
   
   close(fifo_fd);
@@ -268,7 +272,6 @@ int main(int argc, char** argv) {
   pthread_mutex_t backup_mutex;
   DIR* pDir;
   int error;
-  int fifo_fd;
   // int managing_threads_number = 0;
 
   if (kvs_init()) {
@@ -296,6 +299,8 @@ int main(int argc, char** argv) {
     error = 1;
   }
 
+  /** Erase previous FIFO. */
+  unlink(argv[4]);
   /** Open register FIFO. */
   if (mkfifo(argv[4], 0666) != 0) {
     fprintf(stderr, "Failure creating register FIFO.\n");
