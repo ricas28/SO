@@ -82,21 +82,25 @@ void* managing_thread_fn(void *arg){
     /** Read the opcode. */
     /** TODO: Remove temporary mensages and read whole request. */
     char op_code[1];
-    switch (read(req_fd, op_code, 1)) {
-      case OP_DISCONNECT:
-        printf("disconnect.\n");
-        break;
+    ssize_t ret = read(req_fd, op_code, 1);
+    if(ret > 0){
+      switch (op_code[0]) {
+        case OP_DISCONNECT:
+          printf("disconnect.\n");
+          break;
 
-      case OP_SUBSCRIBE:
-        printf("subscribe.\n");
-        break;
+        case OP_SUBSCRIBE:
+          printf("subscribe.\n");
+          break;
 
-      case OP_UNSUBSCRIBE:
-        printf("unsubcribe.\n");
-        break;
-     
-      default:
-       printf("Strange OP.\n");
+        case OP_UNSUBSCRIBE:
+          printf("unsubcribe.\n");
+          break;
+
+        default:
+          printf("Strange OP.\n");
+          break;
+      }
     }
   }
 
@@ -120,10 +124,9 @@ void* host_thread_fn(void* arg){
   
   while (error == 0) {
     char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
-    int intr;
     ssize_t ret;
 
-    if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, &intr)) == -1){
+    if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, NULL)) == -1){
       fprintf(stderr, "Failure reading from register FIFO.\n");
       error = 1;
     }

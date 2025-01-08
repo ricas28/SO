@@ -85,17 +85,21 @@ int kvs_disconnect(void) {
 int kvs_subscribe(const char *key) {
   int req_pipe_fd, resp_pipe_fd;
   char result_message[2];
-  char send_message[MAX_STRING_SIZE+1];
-  int random;
+  char send_message[MAX_STRING_SIZE+2];
+  size_t key_size = strlen(key);
   
   /* Build the string with the message to send (Opcode 3 + key). */
   send_message[0] = '3';
   strcat(send_message, key);
+  /** Add padding. */
+  for(size_t i = key_size + 1; i < MAX_STRING_SIZE + 2; i++){
+    send_message[i] = '\0';
+  }
 
   /* Open the request pipe.*/
   req_pipe_fd = open(REQ_PIPE_PATH, O_WRONLY);
   /* Write the key meant to subscribe into the request pipe. */
-  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE+1) == -1){
+  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE+2) == -1){
     fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
     return 1;
   }
@@ -105,7 +109,7 @@ int kvs_subscribe(const char *key) {
   /* Open the response pipe. */
   resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
   /* Read the response from the response pipe. */
-  if(read_all(resp_pipe_fd, result_message, 2, &random) == -1 || random == 1){
+  if(read_all(resp_pipe_fd, result_message, 2, NULL) == -1){
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
   }
