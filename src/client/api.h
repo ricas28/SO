@@ -31,8 +31,6 @@ int kvs_subscribe(const char *key);
 int kvs_unsubscribe(const char *key);
 
 /// Thread open for the notifications pipe.  
-/// @param arg notifications_pipe_path.
-/// @return null;
-void* notifications_manager(void* arg);
+void* notifications_manager();
 
 #endif // CLIENT_API_H

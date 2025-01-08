@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
   if(kvs_connect(req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]) == 1)
     return -1;
   
-  if (pthread_create(&notifications_thread, NULL, notifications_manager, (void*) notif_pipe_path) != 0){
+  if (pthread_create(&notifications_thread, NULL, notifications_manager, NULL) != 0){
     fprintf(stderr, "ERROR: Unable to create notifications thread.\n");
     return -1;
   } 
@@ -42,11 +42,11 @@ int main(int argc, char *argv[]) {
     switch (get_next(STDIN_FILENO)) {
     case CMD_DISCONNECT:
       if (kvs_disconnect() != 0) {
-        fprintf(stderr, "Failed to disconnect to the server\n");
+        fprintf(stderr, "Failed to disconnect to the server.\n");
         return 1;
       }
-      // TODO: end notifications thread
-      printf("Disconnected from server\n");
+      // TODO: end notifications thread.
+      printf("Disconnected from server.\n");
       return 0;
 
     case CMD_SUBSCRIBE:

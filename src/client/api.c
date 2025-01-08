@@ -10,11 +10,21 @@
 #include "src/common/protocol.h"
 #include "src/common/io.h"
 
+char REQ_PIPE_PATH[256];
+char RESP_PIPE_PATH[256];
+char NOTIF_PIPE_PATH[256];
+char SERVER_PIPE_PATH[256];
+
 int kvs_connect(const char* req_pipe_path, const char *resp_pipe_path,
                 const char *notif_pipe_path, const char *server_pipe_path) {
   size_t req_pipe_size;
   size_t resp_pipe_size;
   size_t notif_pipe_size;
+
+  strcpy(REQ_PIPE_PATH, req_pipe_path);
+  strcpy(RESP_PIPE_PATH, resp_pipe_path);
+  strcpy(NOTIF_PIPE_PATH ,notif_pipe_path);
+  strcpy(SERVER_PIPE_PATH, server_pipe_path);
 
   /** Erase previous FIFOs*/
   unlink(req_pipe_path);
@@ -62,6 +72,7 @@ int kvs_connect(const char* req_pipe_path, const char *resp_pipe_path,
     fprintf(stderr, "Failure reading result mensage for connect.\n");
     return 1;
   }
+  close(resp_pipe);
   printf("Server returned %c for operation: connect\n", result_mensage[1]);
   return 0;
 }
@@ -72,45 +83,97 @@ int kvs_disconnect(void) {
 }
 
 int kvs_subscribe(const char *key) {
-  fprintf(stderr, "%s", key); // Just to compile.
-  // send subscribe message to request pipe and wait for response in response
-  // pipe
+  int req_pipe_fd, resp_pipe_fd;
+  char result_message[2];
+  char send_message[MAX_STRING_SIZE+1];
+  int random;
+  
+  /* Build the string with the message to send (Opcode 3 + key). */
+  send_message[0] = '3';
+  strcat(send_message, key);
+
+  /* Open the request pipe.*/
+  req_pipe_fd = open(REQ_PIPE_PATH, O_WRONLY);
+  /* Write the key meant to subscribe into the request pipe. */
+  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE+1) == -1){
+    fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
+    return 1;
+  }
+  /* Close the request pipe. */
+  close(req_pipe_fd);
+
+  /* Open the response pipe. */
+  resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
+  /* Read the response from the response pipe. */
+  if(read_all(resp_pipe_fd, result_message, 2, &random) == -1 || random == 1){
+    fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
+    return 1;
+  }
+  /* Close the response pipe. */
+  close(resp_pipe_fd);
+
+  printf("Server returned %c for operation: subscribe.\n", result_message[1]);
   return 0;
 }
 
 int kvs_unsubscribe(const char *key) {
-  fprintf(stderr, "%s", key); // Just to compile.
-  // send unsubscribe message to request pipe and wait for response in response
-  // pipe
+  int req_pipe_fd, resp_pipe_fd;
+  char result_message[2];
+  char send_message[MAX_STRING_SIZE + 1];
+  int random;
+
+  /* Build the string with the message to send (Opcode 4 + key). */
+  send_message[0] = '4';
+  strcat(send_message, key);
+
+  /* Open the request pipe.*/
+  req_pipe_fd = open(REQ_PIPE_PATH, O_WRONLY);
+  /* Write the key meant to subscribe into the request pipe. */
+  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE+1) == -1){
+    fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
+    return 1;
+  }
+  /* Close the request pipe. */
+  close(req_pipe_fd);
+
+  /* Open the response pipe. */
+  resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
+  /* Read the response from the response pipe. */
+  if(read_all(resp_pipe_fd, result_message, 2, &random) == -1 || random == 1){
+    fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
+    return 1;
+  }
+  /* Close the response pipe. */
+  close(resp_pipe_fd);
+
+  printf("Server returned %c for operation: unsubscribe.\n", result_message[1]);
   return 0;
 }
 
-void* notifications_manager(void* arg){
-  const char* notif_pipe_path = (char *) arg;
-  int notif_fd; 
-  ssize_t status = 1;
+void* notifications_manager(){
+  int notif_fd;
+  int read_result; 
+  int status;
   char buffer[MAX_STRING_SIZE];
 
   // Open the notifications pipe.
-  if ((notif_fd = open(notif_pipe_path, O_RDONLY)) == -1){
+  if ((notif_fd = open(NOTIF_PIPE_PATH, O_RDONLY)) == -1){
     fprintf(stderr, "ERROR: Error opening notifications pipe.\n");
   }
 
   // While the pipe is open.
-  while (status != 0){
-    // If notificaitons pipe passed EOF, close the pipe.
-    if ((status = read(notif_fd, buffer, MAX_STRING_SIZE)) == 0){
-      fprintf(stderr, "ALERT: Notifications pipe received EOF, closing.\n");
-      close(notif_fd);
-    }
+  while ((read_result = read_all(notif_fd, buffer, MAX_STRING_SIZE, &status)) != 0){
     // If error, print that an error occured and keep going.
-    else if (status == -1){
+    if (read_result == -1){
       fprintf(stderr, "ERROR: Error reading from notifications pipe.\n");
     }
     // TODO: Print the result to the client's stdout.
     else{
-      fprintf(stdout, "olala.\n");
+      printf("%s", buffer);
     }
   }
+  // Notifications pipe passed EOF, close the pipe.
+  fprintf(stderr, "ALERT: Notifications pipe received EOF, closing.\n");
+  close(notif_fd);
   return NULL;
 }
