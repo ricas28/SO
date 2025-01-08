@@ -84,3 +84,33 @@ int kvs_unsubscribe(const char *key) {
   // pipe
   return 0;
 }
+
+void* notifications_manager(void* arg){
+  const char* notif_pipe_path = (char *) arg;
+  int notif_fd; 
+  ssize_t status = 1;
+  char buffer[MAX_STRING_SIZE];
+
+  // Open the notifications pipe.
+  if ((notif_fd = open(notif_pipe_path, O_RDONLY)) == -1){
+    fprintf(stderr, "ERROR: Error opening notifications pipe.\n");
+  }
+
+  // While the pipe is open.
+  while (status != 0){
+    // If notificaitons pipe passed EOF, close the pipe.
+    if ((status = read(notif_fd, buffer, MAX_STRING_SIZE)) == 0){
+      fprintf(stderr, "ALERT: Notifications pipe received EOF, closing.\n");
+      close(notif_fd);
+    }
+    // If error, print that an error occured and keep going.
+    else if (status == -1){
+      fprintf(stderr, "ERROR: Error reading from notifications pipe.\n");
+    }
+    // Print the result to the client's stdout.
+    else{
+      fprintf(stdout, "olala.\n");
+    }
+  }
+
+}
