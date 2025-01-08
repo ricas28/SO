@@ -24,9 +24,9 @@ typedef struct Thread_data{
 }Thread_data;
 
 typedef struct Managing_thread{
-      char req_pipe[MAX_PIPE_PATH_LENGTH];
-      char rep_pipe[MAX_PIPE_PATH_LENGTH];
-      char notif_pipe[MAX_PIPE_PATH_LENGTH];
+  char req_pipe[MAX_PIPE_PATH_LENGTH];
+  char rep_pipe[MAX_PIPE_PATH_LENGTH];
+  char notif_pipe[MAX_PIPE_PATH_LENGTH];
 }Managing_thread;
 
 /// Processes every command on a file.
@@ -338,7 +338,7 @@ int main(int argc, char** argv) {
   }
 
   if(argc < 5){
-    fprintf(stderr, "Usage: %s <directory path> <max backups> <max threads> <pipe name>\n", argv[0]);
+    fprintf(stderr, "Usage: %s <directory_path> <max_backups> <max_threads> <pipe_path>\n", argv[0]);
     return -1;
   }
   const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
@@ -367,7 +367,6 @@ int main(int argc, char** argv) {
     fprintf(stderr, "Error creating host thread.\n");
     error = 1;
   }
-
 
   if (error != 1){
     error = dispatch_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir, host_thread);
