@@ -107,10 +107,10 @@ void* notifications_manager(void* arg){
     else if (status == -1){
       fprintf(stderr, "ERROR: Error reading from notifications pipe.\n");
     }
-    // Print the result to the client's stdout.
+    // TODO: Print the result to the client's stdout.
     else{
       fprintf(stdout, "olala.\n");
     }
   }
-
+  return NULL;
 }
