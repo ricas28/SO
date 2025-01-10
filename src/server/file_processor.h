@@ -11,7 +11,7 @@
 /// @param backup_mutex mutex for bakcup.
 /// @param pDir DIR struct for folder with .job files.
 /// @return 0 if everything was successful and 1 otherwise.
-int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex,
+int dispatch_job_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex,
                       DIR* pDir);
 
 /// Processes every command on a file.

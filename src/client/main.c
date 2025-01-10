@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         continue;
       }
-
+      printf("Vou dar unsub.\n");
       if (kvs_unsubscribe(keys[0])) {
         fprintf(stderr, "Command subscribe failed\n");
       }

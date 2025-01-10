@@ -4,6 +4,7 @@
         "limits.h": "c",
         "fcntl.h": "c",
         "string.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "type_traits": "c"
     }
 }

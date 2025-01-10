@@ -175,7 +175,7 @@ void *process_file(void *arg){
   return NULL;
 }
 
-int dispatch_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex,
+int dispatch_job_threads(char* directory_path, size_t MAX_BACKUPS, size_t MAX_THREADS, pthread_mutex_t* backup_mutex,
                       DIR* pDir){
   int error = 0;
   struct dirent* file_dir;

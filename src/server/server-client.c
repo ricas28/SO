@@ -3,98 +3,149 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <fcntl.h>
+#include <sys/select.h>
 
 #include "src/common/constants.h"
 #include "src/common/io.h"
+#include "src/common/protocol.h"
+#include "io.h"
 #include "parser.h"
 #include "constants.h"
+#include "server-client.h"
 
-#define OP_DISCONNECT '2'
-#define OP_SUBSCRIBE '3'
-#define OP_UNSUBSCRIBE '4'
-#define UNKOWN_OP '5'
+Server_data *new_server_data(){
+  Server_data *new_thread = (Server_data*)malloc(sizeof(Server_data));
 
-typedef struct Managing_thread{
-  char req_pipe[MAX_PIPE_PATH_LENGTH];
-  char rep_pipe[MAX_PIPE_PATH_LENGTH];
-  char notif_pipe[MAX_PIPE_PATH_LENGTH];
-  int connect_error;
-}Managing_thread;
+  /** Allocate memory. */
+  if(new_thread == NULL){
+    fprintf(stderr, "Failure to allocate memory for new server_thread struct.\n");
+    return NULL;
+  }
 
-Managing_thread *new_managing_thread(const char *buffer, int connect_error){
-    Managing_thread *new_thread;
-    if((new_thread = (Managing_thread *)malloc(sizeof(Managing_thread))) == NULL){
-        fprintf(stderr, "Failure to alocate memory for managing thread.\n");
-        return NULL;
-    }
-    /** Separate the different pipes. */
-    strncpy(new_thread->req_pipe, buffer+1, MAX_PIPE_PATH_LENGTH);
-    strncpy(new_thread->rep_pipe, buffer+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
-    strncpy(new_thread->notif_pipe, buffer+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
-    new_thread->connect_error = connect_error;
-    return new_thread;
+  /** Initialize. */
+  if(sem_init(&new_thread->empty, 0, BUFFER_SIZE) == -1){
+    fprintf(stderr, "Failure to initalize empty semaphore.\n");
+    destroy_server_data(new_thread);
+    return NULL;
+  }
+  if(sem_init(&new_thread->full, 0, 0) == -1){
+    fprintf(stderr, "Failure to initalize full semaphore.\n");
+    destroy_server_data(new_thread);
+    return NULL;
+  }
+  if(pthread_mutex_init(&new_thread->buffer_mutex, NULL) != 0){
+    fprintf(stderr, "Failure to initialize buffer mutex.\n");
+    destroy_server_data(new_thread);
+    return NULL;
+  }
+
+  new_thread->write_Index = 0;
+  new_thread->read_Index = 0;
+  return new_thread;
+}
+
+void destroy_server_data(Server_data *server_data){
+  if (server_data) {
+    sem_destroy(&server_data->empty);
+    sem_destroy(&server_data->full);
+    pthread_mutex_destroy(&server_data->buffer_mutex);
+    free(server_data);
+  }
+}
+
+char* consume_request(Server_data *server_data){
+  char* request_message = (char*)malloc(MAX_REGISTER_MSG*sizeof(char));
+  
+  sem_wait(&server_data->full); 
+  pthread_mutex_lock(&server_data->buffer_mutex); 
+  memcpy(request_message, server_data->buffer[server_data->read_Index], MAX_REGISTER_MSG);
+  server_data->read_Index = (server_data->read_Index + 1) % BUFFER_SIZE;
+  pthread_mutex_unlock(&server_data->buffer_mutex); 
+  sem_post(&server_data->empty); 
+
+  return request_message;
+}
+
+void produce_request(Server_data *server_data, char *message){
+  /** Wait until there's space to put message. */
+  sem_wait(&server_data->empty);
+  pthread_mutex_lock(&server_data->buffer_mutex);
+  memcpy(server_data->buffer[server_data->write_Index], message, MAX_REGISTER_MSG);
+  server_data->write_Index = (server_data->write_Index + 1) % BUFFER_SIZE;
+  pthread_mutex_unlock(&server_data->buffer_mutex);
+  /** Signal that there's a new mensage to read. */
+  sem_post(&server_data->full);
 }
 
 void* managing_thread_fn(void *arg){
-  Managing_thread *managing_thread = (Managing_thread *)arg;
-  int resp_fd, req_fd;
-  
+  Server_data *server_data = (Server_data*) arg;
+  int req_fd, resp_fd, error = 0;
+  fd_set readfds;
+  char *connect_message;
+  char req_pipe[MAX_PIPE_PATH_LENGTH];
+  char resp_pipe[MAX_PIPE_PATH_LENGTH];
+  char notif_pipe[MAX_PIPE_PATH_LENGTH];
+
+  /** Consume a connect request. */
+  connect_message = consume_request(server_data);
+  strncpy(req_pipe, connect_message+1, MAX_PIPE_PATH_LENGTH);
+  strncpy(resp_pipe, connect_message+MAX_PIPE_PATH_LENGTH + 1, MAX_PIPE_PATH_LENGTH);
+  strncpy(notif_pipe, connect_message+MAX_PIPE_PATH_LENGTH*2 + 1, MAX_PIPE_PATH_LENGTH);
+  free(connect_message);
+
   /** Open response pipe. */
-  if ((resp_fd = open(managing_thread->rep_pipe, O_WRONLY)) == -1){
-    fprintf(stderr, "Failure opening response FIFO.\n");
-    /** If FIFO wasn't opened just quit. */
-    free(managing_thread);
-    managing_thread->connect_error = 1;
+  if((resp_fd = open(resp_pipe, O_WRONLY)) == -1){
+    fprintf(stderr, "Failure to open response pipe.");
     return NULL;
   }
-  /** Write mensage for connect. */
-  if(managing_thread->connect_error == 0){
-    if(write_all(resp_fd, "10", 2) == -1){
-      fprintf(stderr, "Failure writing success mensage for connect.\n");
-      close(resp_fd);
-      free(managing_thread);
-      managing_thread->connect_error = 1;
-      return NULL;
-    }
-  }
-  else{
-    if(write_all(resp_fd, "11", 2) == -1){
-      fprintf(stderr, "Failure writing error mensage for connect.\n");
-      close(resp_fd);
-      free(managing_thread);
-      managing_thread->connect_error = 1;
-      return NULL;
-    }
-  }
-    
-  /** Open request pipe. */
-  if((req_fd = open(managing_thread->req_pipe, O_RDONLY)) == -1){
-    fprintf(stderr, "Failure to open request FIFO.\n");
+
+  /** Connect was successful. */
+  if(write_all(resp_fd, "10", 2) == -1){
+    fprintf(stderr, "Failure to write connect mensage.");
     close(resp_fd);
-    free(managing_thread);
-    managing_thread->connect_error = 1;
     return NULL;
   }
 
-  /** Read all request from clients. */
-  while (1) {
-    /** Read the opcode. */
-    /** TODO: Remove temporary mensages and read whole request. */
-    char op_code[1];
-    ssize_t ret = read(req_fd, op_code, 1);
-    if(ret > 0){
-      switch (op_code[0]) {
-        case OP_DISCONNECT:
-          printf("disconnect.\n");
+  /** Open request pipe. */
+  if((req_fd = open(req_pipe, O_RDONLY)) == -1){
+    fprintf(stderr, "Failure to open request pipe.\n");
+    close(resp_fd);
+    return NULL;
+  }
+
+  while(error == 0){
+    char request_mensage[MAX_REGISTER_MSG]; 
+    FD_ZERO(&readfds);
+    FD_SET(req_fd, &readfds);
+    int activity = select(req_fd + 1, &readfds, NULL, NULL, NULL);
+    if (activity == -1) {
+      perror("select");
+      break;      
+    }
+    /** Only read if there's something to read. */
+    if (FD_ISSET(req_fd, &readfds)){
+      /** Read OP_CODE. */
+      ssize_t ret = read(req_fd, request_mensage, 1);
+      switch (request_mensage[0]) {
+        case OP_CODE_DISCONNECT:
           break;
 
-        case OP_SUBSCRIBE:
-          printf("subscribe.\n");
+        case OP_CODE_SUBSCRIBE:
+          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
+            fprintf(stderr, "Failure to parse subsribe request.\n");
+            error = 1;
+          }
+          write(resp_fd, "30", 2);
           break;
 
-        case OP_UNSUBSCRIBE:
-          printf("unsubcribe.\n");
+        case OP_CODE_UNSUBSCRIBE:
+          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
+            fprintf(stderr, "Failure to parse subsribe request.\n");
+            error = 1;
+          }
+          write(resp_fd, "40", 2);
           break;
 
         default:
@@ -106,29 +157,28 @@ void* managing_thread_fn(void *arg){
 
   close(resp_fd);
   close(req_fd);
-  free(managing_thread);
   return NULL;
 }
 
 void* host_thread_fn(void* arg){
-  const char* fifo_name = (const char*) arg;
-  int fifo_fd, error = 0, active_sessions = 0;
-  pthread_t client_threads[MAX_SESSION_COUNT];
+  Host_thread *host_thread = (Host_thread*) arg;
+  int fifo_fd;
 
   /** Open register FIFO for reading */
-  fifo_fd = open(fifo_name, O_RDONLY); 
+  fifo_fd = open(host_thread->register_FIFO, O_RDONLY); 
   if (fifo_fd == -1) {
     fprintf(stderr, "Failure opening FIFO.\n");
-    error = 1;
+    return NULL;
   }
   
-  while (error == 0) {
+  while (1) {
     char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
     ssize_t ret;
 
     if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, NULL)) == -1){
       fprintf(stderr, "Failure reading from register FIFO.\n");
-      error = 1;
+      free(buffer);
+      break;
     }
     /** Nothing useful was read. */
     if (ret <= 1 && (buffer[0] == '\n')) { 
@@ -142,23 +192,11 @@ void* host_thread_fn(void* arg){
       break;
     }
 
-    /** New managing thread. */
-    Managing_thread *new_thread;
-    if((new_thread = new_managing_thread(buffer, error)) == NULL){
-        error = 1;
-    }
-    if(pthread_create(&client_threads[active_sessions++], NULL, managing_thread_fn, (void *)new_thread) != 0){
-      fprintf(stderr, "Failure creating managing thread.\n");
-      error = 1;
-    }
-
+    /** Put connect request on request buffer. */
+    produce_request(host_thread->server_data, buffer);
     free(buffer);
   }
   
-  for(int i = 0; i < MAX_SESSION_COUNT; i++){
-    if(pthread_join(client_threads[i], NULL) != 0)
-      fprintf(stderr, "Failure joining %d managing thread\n", i);
-  }
   close(fifo_fd);
   return NULL;
 }

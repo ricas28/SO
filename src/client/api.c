@@ -43,7 +43,7 @@ int kvs_connect(const char* req_pipe_path, const char *resp_pipe_path,
 
   /** Create request mensage. */
   char buffer[MAX_PIPE_PATH_LENGTH*3 + 1]; //buffer to store the path names and the opcode 1.
-  snprintf(buffer, MAX_PIPE_PATH_LENGTH + 1, "1%s", req_pipe_path);
+  snprintf(buffer, MAX_PIPE_PATH_LENGTH + 1, "%c%s", OP_CODE_CONNECT, req_pipe_path);
   for(size_t i = req_pipe_size + 1; i <= MAX_PIPE_PATH_LENGTH; i++)
     buffer[i] = '\0';
   strncpy(buffer + MAX_PIPE_PATH_LENGTH + 1, resp_pipe_path, resp_pipe_size);
@@ -60,20 +60,20 @@ int kvs_connect(const char* req_pipe_path, const char *resp_pipe_path,
       return 1;
   }
 
-  int intr, resp_pipe;
-  char result_mensage[2];
+  int resp_pipe;
+  char result_message[2];
   /** Open responde FIFO. */
   if((resp_pipe = open(resp_pipe_path, O_RDONLY)) == -1){
     fprintf(stderr, "Failure opening responde pipe for connect.\n");
     return 1;
   }
   /** Read result mensage. */
-  if(read_all(resp_pipe, result_mensage, 2, &intr) == -1){
+  if(read_all(resp_pipe, result_message, 2, NULL) == -1){
     fprintf(stderr, "Failure reading result mensage for connect.\n");
     return 1;
   }
   close(resp_pipe);
-  printf("Server returned %c for operation: connect\n", result_mensage[1]);
+  printf("Server returned %c for operation: connect\n", result_message[1]);
   return 0;
 }
 
@@ -85,11 +85,49 @@ int kvs_disconnect(void) {
 int kvs_subscribe(const char *key) {
   int req_pipe_fd, resp_pipe_fd;
   char result_message[2];
-  char send_message[MAX_STRING_SIZE+2];
+  char send_message[MAX_STRING_SIZE + 2];
   size_t key_size = strlen(key);
   
   /* Build the string with the message to send (Opcode 3 + key). */
-  send_message[0] = '3';
+  send_message[0] = OP_CODE_SUBSCRIBE;
+  strcat(send_message, key);
+  /** Add padding. */
+  for(size_t i = key_size + 1; i < MAX_STRING_SIZE + 2; i++){
+    send_message[i] = '\0';
+  }
+
+  /* Open the request pipe.*/
+  req_pipe_fd = open(REQ_PIPE_PATH, O_WRONLY);
+  /* Write the key meant to subscribe into the request pipe. */
+  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE + 2) == -1){
+    fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
+    return 1;
+  }
+  /* Close the request pipe. */
+  close(req_pipe_fd);
+
+  /* Open the response pipe. */
+  resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
+  /* Read the response from the response pipe. */
+  if(read_all(resp_pipe_fd, result_message, 2, NULL) == -1){
+    fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
+    return 1;
+  }
+  /* Close the response pipe. */
+  close(resp_pipe_fd);
+
+  printf("Server returned %c for operation: subscribe\n", result_message[1]);
+  return 0;
+}
+
+int kvs_unsubscribe(const char *key) {
+  int req_pipe_fd, resp_pipe_fd;
+  char result_message[2];
+  char send_message[MAX_STRING_SIZE + 2];
+  size_t key_size = strlen(key);
+
+  /* Build the string with the message to send (OP_CODE_UNSUBSCRIBE + key). */
+  send_message[0] = OP_CODE_UNSUBSCRIBE;
   strcat(send_message, key);
   /** Add padding. */
   for(size_t i = key_size + 1; i < MAX_STRING_SIZE + 2; i++){
@@ -109,48 +147,14 @@ int kvs_subscribe(const char *key) {
   /* Open the response pipe. */
   resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
   /* Read the response from the response pipe. */
-  if(read_all(resp_pipe_fd, result_message, 2, NULL) == -1){
+  if(read_all(resp_pipe_fd, result_message, 2, NULL)){
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
   }
   /* Close the response pipe. */
   close(resp_pipe_fd);
 
-  printf("Server returned %c for operation: subscribe.\n", result_message[1]);
-  return 0;
-}
-
-int kvs_unsubscribe(const char *key) {
-  int req_pipe_fd, resp_pipe_fd;
-  char result_message[2];
-  char send_message[MAX_STRING_SIZE + 1];
-  int random;
-
-  /* Build the string with the message to send (Opcode 4 + key). */
-  send_message[0] = '4';
-  strcat(send_message, key);
-
-  /* Open the request pipe.*/
-  req_pipe_fd = open(REQ_PIPE_PATH, O_WRONLY);
-  /* Write the key meant to subscribe into the request pipe. */
-  if(write_all(req_pipe_fd, send_message, MAX_STRING_SIZE+1) == -1){
-    fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
-    return 1;
-  }
-  /* Close the request pipe. */
-  close(req_pipe_fd);
-
-  /* Open the response pipe. */
-  resp_pipe_fd = open(RESP_PIPE_PATH, O_RDONLY);
-  /* Read the response from the response pipe. */
-  if(read_all(resp_pipe_fd, result_message, 2, &random) == -1 || random == 1){
-    fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
-    return 1;
-  }
-  /* Close the response pipe. */
-  close(resp_pipe_fd);
-
-  printf("Server returned %c for operation: unsubscribe.\n", result_message[1]);
+  printf("Server returned %c for operation: unsubscribe\n", result_message[1]);
   return 0;
 }
 
