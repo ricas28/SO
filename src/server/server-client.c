@@ -11,9 +11,18 @@
 #include "src/common/io.h"
 #include "src/common/protocol.h"
 #include "io.h"
+#include "kvs.h"
 #include "parser.h"
 #include "constants.h"
 #include "server-client.h"
+#include "operations.h"
+
+/* operations.c contains the HashTable.
+ * TODO: Find a way to access the HashTable.
+ * UPDATE: CHATGPT SAID USE EXTERN (WTF IS EXTERN).
+ */
+
+extern const HashTable* kvs_table;
 
 Server_data *new_server_data(){
   Server_data *new_thread = (Server_data*)malloc(sizeof(Server_data));
@@ -81,7 +90,7 @@ void produce_request(Server_data *server_data, char *message){
 
 void* managing_thread_fn(void *arg){
   Server_data *server_data = (Server_data*) arg;
-  int req_fd, resp_fd, error = 0;
+  int req_fd, resp_fd, notif_fd, error = 0;
   fd_set readfds;
   char *connect_message;
   char req_pipe[MAX_PIPE_PATH_LENGTH];
@@ -97,13 +106,14 @@ void* managing_thread_fn(void *arg){
 
   /** Open response pipe. */
   if((resp_fd = open(resp_pipe, O_WRONLY)) == -1){
-    fprintf(stderr, "Failure to open response pipe.");
+    fprintf(stderr, "Failure to open response pipe.\n");
+    close(resp_fd);
     return NULL;
   }
 
   /** Connect was successful. */
   if(write_all(resp_fd, "10", 2) == -1){
-    fprintf(stderr, "Failure to write connect mensage.");
+    fprintf(stderr, "Failure to write connect mensage.\n");
     close(resp_fd);
     return NULL;
   }
@@ -111,12 +121,19 @@ void* managing_thread_fn(void *arg){
   /** Open request pipe. */
   if((req_fd = open(req_pipe, O_RDONLY)) == -1){
     fprintf(stderr, "Failure to open request pipe.\n");
-    close(resp_fd);
+    close(req_fd);
+    return NULL;
+  }
+
+  /** Open notifications pipe. */
+  if((notif_fd = open(notif_pipe, O_WRONLY)) == -1){
+    fprintf(stderr, "Failure to open notifications pipe.\n");
+    close(notif_fd);
     return NULL;
   }
 
   while(error == 0){
-    char request_mensage[MAX_REGISTER_MSG]; 
+    char request_message[MAX_REGISTER_MSG]; 
     FD_ZERO(&readfds);
     FD_SET(req_fd, &readfds);
     int activity = select(req_fd + 1, &readfds, NULL, NULL, NULL);
@@ -127,13 +144,15 @@ void* managing_thread_fn(void *arg){
     /** Only read if there's something to read. */
     if (FD_ISSET(req_fd, &readfds)){
       /** Read OP_CODE. */
-      ssize_t ret = read(req_fd, request_mensage, 1);
-      switch (request_mensage[0]) {
+      ssize_t ret = read(req_fd, request_message, 1);
+      // close(req_fd); -> We shouldn't close pipes.
+      switch (request_message[0]) {
         case OP_CODE_DISCONNECT:
           break;
 
         case OP_CODE_SUBSCRIBE:
-          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
+          if((ret = read(req_fd, request_message + 1, MAX_STRING_SIZE + 1)) == -1){
+            subscribe_key(kvs_table, request_message + 1, notif_fd); // PROBLEM: HOW DO WE ACCESS THE TABLE?!?!
             fprintf(stderr, "Failure to parse subsribe request.\n");
             error = 1;
           }
@@ -141,7 +160,7 @@ void* managing_thread_fn(void *arg){
           break;
 
         case OP_CODE_UNSUBSCRIBE:
-          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
+          if((ret = read(req_fd, request_message + 1, MAX_STRING_SIZE + 1)) == -1){
             fprintf(stderr, "Failure to parse subsribe request.\n");
             error = 1;
           }
@@ -154,9 +173,9 @@ void* managing_thread_fn(void *arg){
       }
     }
   }
-
-  close(resp_fd);
   close(req_fd);
+  close(resp_fd);
+  close(notif_fd);
   return NULL;
 }
 
