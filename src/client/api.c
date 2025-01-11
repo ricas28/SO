@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/stat.h>
 
 #include "src/common/constants.h"
@@ -81,7 +82,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, const char* req_pipe_p
   }
   /** Read result mensage. */
   if(read_all(*resp_fd, result_message, 2, NULL) == -1){
-    fprintf(stderr, "Failure reading result mensage for connect.\n");
+    fprintf(stderr, "Failure reading result message for connect.\n");
     close(*resp_fd);
     close(*req_fd);
     close(*notif_fd);
@@ -92,8 +93,30 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, const char* req_pipe_p
   return 0;
 }
 
-int kvs_disconnect(void) {
-  // close pipes and unlink pipe files
+int kvs_disconnect(int req_fd, int resp_fd) {
+  char msg[1];
+  msg[0] = '2';
+  /* Send the message to the request pipe. */
+  if (write_all(req_fd, msg, 1) == -1){
+    fprintf(stderr, "Failure writing request message for disconnect.\n");
+    return 1;
+  }
+
+  /* Receive the message from the response pipe. */
+  if (read_all(resp_fd, msg, 1, NULL) == -1){
+    fprintf(stderr, "Failure reading result message for disconnect.\n");
+    return 1;
+  }
+
+  printf("Server returned %c for operation: disconnect.\n", msg[1]);
+
+  /* Close the FIFOs. */
+  close(req_fd);
+  close(resp_fd);
+  /* Erase the FIFOs. */
+  unlink(REQ_PIPE_PATH);
+  unlink(RESP_PIPE_PATH);
+
   return 0;
 }
 
@@ -179,4 +202,11 @@ void* notifications_manager(void *arg){
     printf("\n");
   }
   return NULL;
+}
+
+int end_notifications_thread(int notif_fd, pthread_t notif_thread){
+  close(notif_fd);
+  unlink(NOTIF_PIPE_PATH);
+  pthread_join(notif_thread, NULL);
+  return 0;
 }

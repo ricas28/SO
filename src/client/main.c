@@ -42,11 +42,14 @@ int main(int argc, char *argv[]) {
   while (1) {
     switch (get_next(STDIN_FILENO)) {
     case CMD_DISCONNECT:
-      if (kvs_disconnect() != 0) {
+      if (kvs_disconnect(req_fd, resp_fd) != 0) {
         fprintf(stderr, "Failed to disconnect to the server.\n");
         return 1;
       }
-      // TODO: end notifications thread.
+      if (end_notifications_thread(notif_fd, notifications_thread) != 0) {
+        fprintf(stderr, "Failed to end notifications thread.\n");
+        return 1;
+      }
       printf("Disconnected from server.\n");
       return 0;
 
