@@ -162,7 +162,7 @@ void* notifications_manager(void *arg){
   char buffer[MAX_STRING_SIZE*2 + 3 + 2];
 
   while(1){
-    if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 3, NULL)) == -1){
+    if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 5, NULL)) == -1){
       fprintf(stderr, "Failure to read from notification pipe.\n");
       break;
     }

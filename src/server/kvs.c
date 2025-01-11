@@ -33,26 +33,23 @@ struct HashTable* create_hash_table() {
 
 void notify_key_change(KeyNode *node){
     Node *aux = node->client_list->head;
-    size_t key_len, value_len;
+    size_t key_len = strlen(node->key), value_len = strlen(node->value);
+    /** 3 for "(,)" and 2 for the two '\0'. */
+    char buffer[MAX_STRING_SIZE*2 + 3 + 2];
+
+    sprintf(buffer, "(%s", node->key);
+    for(size_t i = key_len + 2; i <= MAX_STRING_SIZE + 1; i++){
+        buffer[i] = ' ';
+    }
+    sprintf(buffer + MAX_STRING_SIZE + 2, ",%s", node->value);
+    /** Start at buffer[1+ MAX_STRING_SIZE + 1 + 1 + value_len + 1] */
+    for(size_t i = MAX_STRING_SIZE + value_len + 3 ; i <= MAX_STRING_SIZE*2 + 3; i++){
+        buffer[i] = ' ';
+    }
+    buffer[MAX_STRING_SIZE*2 + 4] = ')';
 
     while(aux != NULL){
-        /** 3 for "(,)" and 2 for the two '\0'. */
-        char buffer[MAX_STRING_SIZE*2 + 3 + 2];
-        key_len = strlen(node->key);
-        value_len = strlen(node->value);
-        sprintf(buffer, "(%s", node->key);
-        for(size_t i = key_len + 2; i <= MAX_STRING_SIZE + 1; i++){
-            buffer[i] = ' ';
-        }
-        sprintf(buffer + MAX_STRING_SIZE + 2, ",%s", node->value);
-        /** Start at buffer[1+ MAX_STRING_SIZE + 1 + 1 + value_len + 1] */
-        for(size_t i = MAX_STRING_SIZE + value_len + 4; i <= MAX_STRING_SIZE*2 + 3; i++){
-            buffer[i] = ' ';
-        }
-        buffer[MAX_STRING_SIZE*2 + 4] = ')';
-        
         write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 5);
-    
         aux = aux->next;
     }
 }
