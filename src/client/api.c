@@ -158,11 +158,25 @@ int kvs_unsubscribe(int req_fd, int resp_fd, const char *key) {
 void* notifications_manager(void *arg){
   int *notif_fd = (int*) arg;
   ssize_t read;
-  char buffer[MAX_STRING_SIZE*2 + 3];
+  /** 3 for "(,)" and 2 for the two '\0'. */
+  char buffer[MAX_STRING_SIZE*2 + 3 + 2];
 
-  if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 3, NULL)) == -1){
-    fprintf(stderr, "Failure to read from notification pipe.\n");
+  while(1){
+    if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 3, NULL)) == -1){
+      fprintf(stderr, "Failure to read from notification pipe.\n");
+      break;
+    }
+
+    if(read == 0){
+      fprintf(stderr, "PIPE broken.\n");
+      break;
+    }
+    for(int i = 0; i < MAX_STRING_SIZE*2 + 3 + 2; i++){
+      if(buffer[i] != ' '){
+        printf("%c", buffer[i]);
+      }
+    }
+    printf("\n");
   }
-  printf("%s\n", buffer);
   return NULL;
 }

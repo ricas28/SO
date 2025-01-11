@@ -14,6 +14,7 @@
 #include "parser.h"
 #include "constants.h"
 #include "server-client.h"
+#include "operations.h"
 
 Server_data *new_server_data(){
   Server_data *new_thread = (Server_data*)malloc(sizeof(Server_data));
@@ -123,26 +124,35 @@ void* managing_thread_fn(void *arg){
   }
 
   while(error == 0){
-    char request_mensage[MAX_REGISTER_MSG]; 
+    char request_message[MAX_REGISTER_MSG]; 
     /** Only read if there's something to read. */
-    read_all(req_fd, request_mensage, 1, NULL);
-    switch (request_mensage[0]) {
+    read_all(req_fd, request_message, 1, NULL);
+    switch (request_message[0]) {
       case OP_CODE_DISCONNECT:
         break;
 
       case OP_CODE_SUBSCRIBE:
-        if(read_all(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1, NULL) == -1){
+        if(read_all(req_fd, request_message + 1, MAX_STRING_SIZE + 1, NULL) == -1){
           fprintf(stderr, "Failure to parse subsribe request.\n");
           error = 1;
         }
-        if(write_all(resp_fd, "30", 2) == -1){
-          fprintf(stderr, "Failure to write subscribe success.\n");
-          error = 1;
+        if(subscribe_key(request_message + 1, notif_fd)){
+          /** Key was nout found. */
+          if(write_all(resp_fd, "30", 2) == -1){
+            fprintf(stderr, "Failure to write subscribe (Key not found).\n");
+            error = 1;
+          }
+        }
+        else{
+          if(write_all(resp_fd, "31", 2) == -1){
+            fprintf(stderr, "Failure to write subscribe (success).\n");
+            error = 1;
+          }
         }
         break;
 
       case OP_CODE_UNSUBSCRIBE:
-        if(read_all(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1, NULL) == -1){
+        if(read_all(req_fd, request_message + 1, MAX_STRING_SIZE + 1, NULL) == -1){
           fprintf(stderr, "Failure to parse subsribe request.\n");
           error = 1;
         }

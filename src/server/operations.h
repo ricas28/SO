@@ -35,11 +35,6 @@ void wrlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
 /// @param keys
 void rdlock_table_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
 
-/// Unlock all table entries.
-/// @param num_pairs 
-/// @param keys
-void unlock_talbe_entries(size_t num_pairs, char keys[][MAX_STRING_SIZE]);
-
 /// Initializes the KVS state.
 /// @return 0 if the KVS state was initialized successfully, 1 otherwise.
 int kvs_init();
@@ -87,6 +82,13 @@ int create_backup_file(char file_name[], size_t backup_number);
 /// the moment.
 /// @return 0 if the backup was successful, 1 otherwise.
 int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pthread_mutex_t *backup_mutex);
+
+/// Adds the client to the binary tree of clients associated to the key.
+/// @param ht Hash table in use.
+/// @param key Key of the pair to be subscribed.
+/// @param client_id Id of the client subscribing.
+/// @return 0 if successfull, 1 otherwise.
+int subscribe_key(const char* key, const int notif_fd);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.

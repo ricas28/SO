@@ -49,13 +49,6 @@ int write_pair(HashTable *ht, const char *key, const char *value);
 /// @param list 
 void freeList(List* list);
 
-/// Adds the client to the binary tree of clients associated to the key.
-/// @param ht Hash table in use.
-/// @param key Key of the pair to be subscribed.
-/// @param client_id Id of the client subscribing.
-/// @return 0 if successfull, 1 otherwise.
-int subscribe_key(HashTable* ht, const char* key, const int notif_fd);
-
 /// Adds the client to the binary tree of clients associtated to the key.
 /// @param root List of the client IDs.
 /// @param client_id Id of the client subscribing to the key.

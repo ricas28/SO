@@ -1,9 +1,13 @@
 #include "kvs.h"
-#include "string.h"
 
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <pthread.h>
+
+#include "constants.h"
+#include "src/common/io.h"
 
 
 int hash(const char *key) {
@@ -27,6 +31,46 @@ struct HashTable* create_hash_table() {
   return ht;
 }
 
+void notify_key_change(KeyNode *node){
+    Node *aux = node->client_list->head;
+    size_t key_len, value_len;
+
+    while(aux != NULL){
+        /** 3 for "(,)" and 2 for the two '\0'. */
+        char buffer[MAX_STRING_SIZE*2 + 3 + 2];
+        key_len = strlen(node->key);
+        value_len = strlen(node->value);
+        sprintf(buffer, "(%s", node->key);
+        for(size_t i = key_len + 2; i <= MAX_STRING_SIZE + 1; i++){
+            buffer[i] = ' ';
+        }
+        sprintf(buffer + MAX_STRING_SIZE + 2, ",%s", node->value);
+        /** Start at buffer[1+ MAX_STRING_SIZE + 1 + 1 + value_len + 1] */
+        for(size_t i = MAX_STRING_SIZE + value_len + 4; i <= MAX_STRING_SIZE*2 + 3; i++){
+            buffer[i] = ' ';
+        }
+        buffer[MAX_STRING_SIZE*2 + 4] = ')';
+        
+        write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 5);
+    
+        aux = aux->next;
+    }
+}
+
+/**
+void notify_key_deletion(KeyNode *node){
+    Node *aux = node->client_list->head;
+    size_t key_size = strlen(node->key);
+
+    while(aux != NULL){
+        char buffer[MAX_STRING_SIZE*2 + 3];
+        sprintf(buffer, "(%s,DELETED)", node->key);
+        write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 3);
+        aux = aux->next;
+    }
+}
+*/
+
 int write_pair(HashTable *ht, const char *key, const char *value) {
     int index = hash(key);
     KeyNode *keyNode = ht->table[index];
@@ -35,14 +79,17 @@ int write_pair(HashTable *ht, const char *key, const char *value) {
         if (strcmp(keyNode->key, key) == 0) {    
             free(keyNode->value);
             keyNode->value = strdup(value);
+            /** A change on the key occured. */
+            notify_key_change(keyNode);
             return 0;
         }
         keyNode = keyNode->next; // Move to the next node
     }
 
     // Key not found, create a new key node
-    keyNode = malloc(sizeof(KeyNode));
-    keyNode->client_list = malloc(sizeof(List));
+    keyNode = (KeyNode*)malloc(sizeof(KeyNode));
+    keyNode->client_list = (List*)malloc(sizeof(List));
+    keyNode->client_list->head = NULL;
     pthread_rwlock_init(&keyNode->client_list->lockList, NULL); // Lock for each notif_fd list
     keyNode->key = strdup(key); // Allocate memory for the key
     keyNode->value = strdup(value); // Allocate memory for the value
@@ -83,8 +130,8 @@ int delete_pair(HashTable *ht, const char *key) {
                 prevNode->next = keyNode->next; // Link the previous node to the next node
             }
             // Free the memory allocated for the key and value
-            // TODO: Warn every client that the key has been deleted.
-            freeList(keyNode->client_list); // Should work, please check.
+            
+            freeList(keyNode->client_list); 
             free(keyNode->key);
             free(keyNode->value);
             free(keyNode); // Free the key node itself
@@ -100,6 +147,8 @@ int delete_pair(HashTable *ht, const char *key) {
 void freeList(List* list){
     Node* tmp = list->head;
     Node* prev = NULL;
+
+    if(list->head == NULL) return;
     while(tmp != NULL){
         prev = tmp;
         tmp = tmp->next;
@@ -108,36 +157,17 @@ void freeList(List* list){
     free(list);
 }
 
-int subscribe_key(HashTable* ht, const char* key, const int notif_fd){
-    int index = hash(key);
-    KeyNode* keyNode = ht->table[index];
-
-    while (keyNode != NULL){
-        if (strcmp(key, keyNode->key) == 0){
-            pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
-            addClientId(keyNode->client_list, notif_fd);
-            pthread_rwlock_unlock(&keyNode->client_list->lockList);
-            return 0;
-        }
-        keyNode = keyNode->next;
-    }
-
-    return 1;
-}
-
 void addClientId(List* client_list, const int notif_fd){
-    Node* newNode = malloc(sizeof(Node));
+    Node* newNode = (Node*)malloc(sizeof(Node));
     newNode->notif_fd = notif_fd;
-    newNode->next = NULL;
+
     if (client_list->head == NULL){
         client_list->head = newNode;
+        client_list->head->next = NULL;
         return;
     }
-    Node* cur = client_list->head;
-    while(cur->next != NULL){
-        cur = cur->next;
-    }
-    cur->next = newNode;
+    newNode->next = client_list->head;
+    client_list->head = newNode;
 }
 
 void free_table(HashTable *ht) {

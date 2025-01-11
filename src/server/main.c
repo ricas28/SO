@@ -63,12 +63,6 @@ int main(int argc, char** argv) {
     closedir(pDir);
     return 1;
   }
-  /** Start processing .job files. */
-  if(dispatch_job_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir) == 1){
-    kvs_terminate();
-    closedir(pDir);
-    return 1;
-  }
   
   /** Create struct for server-client threads. */
   if((server_data = new_server_data()) == NULL){
@@ -97,6 +91,14 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
+
+  /** Start processing .job files. */
+  if(dispatch_job_threads(argv[1], MAX_BACKUPS, MAX_THREADS, &backup_mutex, pDir) == 1){
+    kvs_terminate();
+    closedir(pDir);
+    return 1;
+  }
+  
   if (pthread_join(host_thread, NULL) != 0){
     fprintf(stderr, "Failed to join host thread.\n");
     kvs_terminate();
