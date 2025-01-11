@@ -10,12 +10,23 @@ typedef struct KeyNode {
     char *key;
     char *value;
     struct KeyNode *next;
+    struct List* client_list;
 } KeyNode;
 
 typedef struct HashTable {
     KeyNode *table[TABLE_SIZE];
     pthread_rwlock_t lockTable[TABLE_SIZE];
 } HashTable;
+
+typedef struct Node {
+    int notif_fd;
+    struct Node* next;
+} Node;
+
+typedef struct List{
+    struct Node* head;
+    pthread_rwlock_t lockList;
+} List;
 
 // Hash function based on key initial.
 // @param key Lowercase alphabetical string.
@@ -33,6 +44,22 @@ struct HashTable *create_hash_table();
 /// @param value Value of the pair to be written.
 /// @return 0 if the node was appended successfully, 1 otherwise.
 int write_pair(HashTable *ht, const char *key, const char *value);
+
+/// Frees the client list.
+/// @param list 
+void freeList(List* list);
+
+/// Adds the client to the binary tree of clients associated to the key.
+/// @param ht Hash table in use.
+/// @param key Key of the pair to be subscribed.
+/// @param client_id Id of the client subscribing.
+/// @return 0 if successfull, 1 otherwise.
+int subscribe_key(HashTable* ht, const char* key, const int notif_fd);
+
+/// Adds the client to the binary tree of clients associtated to the key.
+/// @param root List of the client IDs.
+/// @param client_id Id of the client subscribing to the key.
+void addClientId(List* client_list, const int notif_fd);
 
 /// Deletes the value of given key.
 /// @param ht Hash table to delete from.

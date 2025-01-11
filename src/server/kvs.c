@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <ctype.h>
+#include <pthread.h>
 
 
 int hash(const char *key) {
@@ -40,7 +41,9 @@ int write_pair(HashTable *ht, const char *key, const char *value) {
     }
 
     // Key not found, create a new key node
-    keyNode = malloc(sizeof(KeyNode));  
+    keyNode = malloc(sizeof(KeyNode));
+    keyNode->client_list = malloc(sizeof(List));
+    pthread_rwlock_init(&keyNode->client_list->lockList, NULL); // Lock for each notif_fd list
     keyNode->key = strdup(key); // Allocate memory for the key
     keyNode->value = strdup(value); // Allocate memory for the value
     keyNode->next = ht->table[index]; // Link to existing nodes
@@ -80,6 +83,8 @@ int delete_pair(HashTable *ht, const char *key) {
                 prevNode->next = keyNode->next; // Link the previous node to the next node
             }
             // Free the memory allocated for the key and value
+            // TODO: Warn every client that the key has been deleted.
+            freeList(keyNode->client_list); // Should work, please check.
             free(keyNode->key);
             free(keyNode->value);
             free(keyNode); // Free the key node itself
@@ -90,6 +95,49 @@ int delete_pair(HashTable *ht, const char *key) {
     }
     
     return 1;
+}
+
+void freeList(List* list){
+    Node* tmp = list->head;
+    Node* prev = NULL;
+    while(tmp != NULL){
+        prev = tmp;
+        tmp = tmp->next;
+        free(prev);
+    }
+    free(list);
+}
+
+int subscribe_key(HashTable* ht, const char* key, const int notif_fd){
+    int index = hash(key);
+    KeyNode* keyNode = ht->table[index];
+
+    while (keyNode != NULL){
+        if (strcmp(key, keyNode->key) == 0){
+            pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
+            addClientId(keyNode->client_list, notif_fd);
+            pthread_rwlock_unlock(&keyNode->client_list->lockList);
+            return 0;
+        }
+        keyNode = keyNode->next;
+    }
+
+    return 1;
+}
+
+void addClientId(List* client_list, const int notif_fd){
+    Node* newNode = malloc(sizeof(Node));
+    newNode->notif_fd = notif_fd;
+    newNode->next = NULL;
+    if (client_list->head == NULL){
+        client_list->head = newNode;
+        return;
+    }
+    Node* cur = client_list->head;
+    while(cur->next != NULL){
+        cur = cur->next;
+    }
+    cur->next = newNode;
 }
 
 void free_table(HashTable *ht) {
