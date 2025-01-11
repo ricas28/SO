@@ -25,6 +25,7 @@ typedef struct Node {
 
 typedef struct List{
     struct Node* head;
+    pthread_rwlock_t lockList;
 } List;
 
 // Hash function based on key initial.
