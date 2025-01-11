@@ -156,7 +156,18 @@ void* managing_thread_fn(void *arg){
           fprintf(stderr, "Failure to parse subsribe request.\n");
           error = 1;
         }
-        write_all(resp_fd, "40", 2);
+        if(unsubscribe_key(request_message + 1, notif_fd)){
+          if(write_all(resp_fd, "41", 2) == -1){
+            fprintf(stderr, "Failure to write unsubscribe (key not found)\n");
+            error = 1;
+          }
+        }
+        else{
+          if(write_all(resp_fd, "40", 2) == -1){
+            fprintf(stderr, "Failure to unsubscribe (success).\n");
+            error = 1;
+          }
+        }
         break;
 
       default:

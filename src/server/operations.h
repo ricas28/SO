@@ -90,6 +90,8 @@ int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pth
 /// @return 0 if successfull, 1 otherwise.
 int subscribe_key(const char* key, const int notif_fd);
 
+int unsubscribe_key(const char* key, const int notif_fd);
+
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
 void kvs_wait(unsigned int delay_ms);
