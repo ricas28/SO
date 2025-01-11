@@ -49,10 +49,15 @@ int write_pair(HashTable *ht, const char *key, const char *value);
 /// @param list 
 void freeList(List* list);
 
-/// Adds the client to the binary tree of clients associtated to the key.
-/// @param root List of the client IDs.
-/// @param client_id Id of the client subscribing to the key.
+/// Adds the client to the list of clients subscribed to the key.
+/// @param client_list List of the client notifcation fd's.
+/// @param notif_fd notification fd of the client.
 void addClientId(List* client_list, const int notif_fd);
+
+/// Removes the client from the list of clients subscribed to the key.
+/// @param client_list List of the client notifcation fd's.
+/// @param notif_fd notification fd of the client.
+void removeClientId(List* client_list, const int notif_fd);
 
 /// Deletes the value of given key.
 /// @param ht Hash table to delete from.

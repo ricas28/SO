@@ -167,6 +167,30 @@ void addClientId(List* client_list, const int notif_fd){
     client_list->head = newNode;
 }
 
+void removeClientId(List* client_list, const int notif_fd){
+    Node *aux = client_list->head;
+
+    /** Client_list is empty. */
+    if(client_list->head == NULL) return;
+
+    /** Remove head. */
+    if(client_list->head->notif_fd == notif_fd){
+        Node *temp = client_list->head;
+        client_list->head = client_list->head->next;
+        free(temp);
+        return;
+    }
+    while(aux->next != NULL){
+        if(aux->next->notif_fd == notif_fd){
+            Node *temp = aux->next;
+            aux->next = aux->next->next;
+            free(temp);
+            return;
+        }
+        aux = aux->next;
+    }
+}
+
 void free_table(HashTable *ht) {
     for (int i = 0; i < TABLE_SIZE; i++) {
         KeyNode *keyNode = ht->table[i];

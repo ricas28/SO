@@ -397,6 +397,23 @@ int subscribe_key(const char* key, const int notif_fd){
     return 1;
 }
 
+int unsubscribe_key(const char* key, const int notif_fd){
+  int index = hash(key);
+  KeyNode* keyNode = kvs_table->table[index];
+
+  while (keyNode != NULL){
+    if (strcmp(key, keyNode->key) == 0){
+        pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
+        removeClientId(keyNode->client_list, notif_fd);
+        pthread_rwlock_unlock(&keyNode->client_list->lockList);
+        return 0;
+      }
+      keyNode = keyNode->next;
+    }
+
+    return 1;
+}
+
 void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
