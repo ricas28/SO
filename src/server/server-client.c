@@ -81,8 +81,7 @@ void produce_request(Server_data *server_data, char *message){
 
 void* managing_thread_fn(void *arg){
   Server_data *server_data = (Server_data*) arg;
-  int req_fd, resp_fd, error = 0;
-  fd_set readfds;
+  int req_fd, resp_fd, notif_fd, error = 0;
   char *connect_message;
   char req_pipe[MAX_PIPE_PATH_LENGTH];
   char resp_pipe[MAX_PIPE_PATH_LENGTH];
@@ -115,43 +114,44 @@ void* managing_thread_fn(void *arg){
     return NULL;
   }
 
+  /** Open notification pipe. */
+  if((notif_fd = open(notif_pipe, O_WRONLY)) == -1){
+    fprintf(stderr, "Failure to open notification pipe.\n");
+    close(resp_fd);
+    close(req_fd);
+    return NULL;
+  }
+
   while(error == 0){
     char request_mensage[MAX_REGISTER_MSG]; 
-    FD_ZERO(&readfds);
-    FD_SET(req_fd, &readfds);
-    int activity = select(req_fd + 1, &readfds, NULL, NULL, NULL);
-    if (activity == -1) {
-      perror("select");
-      break;      
-    }
     /** Only read if there's something to read. */
-    if (FD_ISSET(req_fd, &readfds)){
-      /** Read OP_CODE. */
-      ssize_t ret = read(req_fd, request_mensage, 1);
-      switch (request_mensage[0]) {
-        case OP_CODE_DISCONNECT:
-          break;
+    read_all(req_fd, request_mensage, 1, NULL);
+    switch (request_mensage[0]) {
+      case OP_CODE_DISCONNECT:
+        break;
 
-        case OP_CODE_SUBSCRIBE:
-          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
-            fprintf(stderr, "Failure to parse subsribe request.\n");
-            error = 1;
-          }
-          write(resp_fd, "30", 2);
-          break;
+      case OP_CODE_SUBSCRIBE:
+        if(read_all(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1, NULL) == -1){
+          fprintf(stderr, "Failure to parse subsribe request.\n");
+          error = 1;
+        }
+        if(write_all(resp_fd, "30", 2) == -1){
+          fprintf(stderr, "Failure to write subscribe success.\n");
+          error = 1;
+        }
+        break;
 
-        case OP_CODE_UNSUBSCRIBE:
-          if((ret = read(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1)) == -1){
-            fprintf(stderr, "Failure to parse subsribe request.\n");
-            error = 1;
-          }
-          write(resp_fd, "40", 2);
-          break;
+      case OP_CODE_UNSUBSCRIBE:
+        if(read_all(req_fd, request_mensage + 1, MAX_STRING_SIZE + 1, NULL) == -1){
+          fprintf(stderr, "Failure to parse subsribe request.\n");
+          error = 1;
+        }
+        write_all(resp_fd, "40", 2);
+        break;
 
-        default:
-          printf("Strange OP.\n");
-          break;
-      }
+      default:
+        printf("Strange OP.\n");
+        break;
     }
   }
 
