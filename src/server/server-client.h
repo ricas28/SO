@@ -12,8 +12,7 @@ typedef struct Client_Node{
 
 typedef struct {
   sem_t empty, full, active_sessions;
-  pthread_mutex_t buffer_mutex, client_list_mutex;
-  Client_Node *client_head;
+  pthread_mutex_t buffer_mutex;
   int write_Index;
   int read_Index;
   char buffer[BUFFER_SIZE][MAX_REGISTER_MSG];

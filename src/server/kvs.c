@@ -163,6 +163,7 @@ void freeList(List* list){
         tmp = tmp->next;
         free(prev);
     }
+    pthread_rwlock_destroy(&list->lockList);
     free(list);
 }
 
