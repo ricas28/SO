@@ -57,7 +57,8 @@ void addClientId(List* client_list, const int notif_fd);
 /// Removes the client from the list of clients subscribed to the key.
 /// @param client_list List of the client notifcation fd's.
 /// @param notif_fd notification fd of the client.
-void removeClientId(List* client_list, const int notif_fd);
+/// @return 0 if notif_fd was removed, 1 if subscription didin't exist.
+int removeClientId(List* client_list, const int notif_fd);
 
 /// Deletes the value of given key.
 /// @param ht Hash table to delete from.

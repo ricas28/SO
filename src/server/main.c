@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <signal.h>
 
 #include "constants.h"
 #include "parser.h"
@@ -19,6 +20,10 @@
 #include "src/common/constants.h"
 #include "src/common/io.h"
 
+/** Ignore SIGPIPE (client disconnects and server can't crash). */
+void setup_SIGPIPE_ignore(){
+  signal(SIGPIPE, SIG_IGN);
+}
 
 int main(int argc, char** argv) {
   pthread_mutex_t backup_mutex;
@@ -28,7 +33,7 @@ int main(int argc, char** argv) {
   Host_thread host_thread_data;
 
   if (kvs_init()) {
-    fprintf(stderr, "Failed to initialize KVS\n");
+    fprintf(stderr, "Failed  to initialize KVS\n");
     return 1;
   }
 
@@ -39,6 +44,8 @@ int main(int argc, char** argv) {
   const size_t MAX_BACKUPS = (size_t)strtoul(argv[2], NULL, 10);
   const size_t MAX_THREADS = (size_t)strtoul(argv[3], NULL, 10);
   
+  setup_SIGPIPE_ignore();
+
   /** Open directory. */
   if((pDir = opendir(argv[1])) == NULL){
     fprintf(stderr, "Failed to open directory.\n");
@@ -97,6 +104,12 @@ int main(int argc, char** argv) {
     kvs_terminate();
     closedir(pDir);
     return 1;
+  }
+  
+  for(int i = 0; i < MAX_SESSION_COUNT; i++){
+    if(pthread_join(managing_threads[i], NULL) != 0){
+      fprintf(stderr, "Failed to join managing thread %d\n", i);
+    }
   }
   
   if (pthread_join(host_thread, NULL) != 0){

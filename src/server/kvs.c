@@ -57,17 +57,26 @@ void notify_key_change(KeyNode *node){
 
 void notify_key_deletion(KeyNode *node){
     Node *aux = node->client_list->head;
-    // size_t key_size = strlen(node->key);
+    size_t key_len = strlen(node->key);
+    /** 3 for "(,)" and 2 for the two '\0'. */
+    char buffer[MAX_STRING_SIZE*2 + 3 + 2];
 
-    char buffer[MAX_STRING_SIZE + 8 + 3];
-    sprintf(buffer, "(%s,DELETED)", node->key);
+    sprintf(buffer, "(%s", node->key);
+    for(size_t i = key_len + 2; i <= MAX_STRING_SIZE + 1; i++){
+        buffer[i] = ' ';
+    }
+    sprintf(buffer + MAX_STRING_SIZE + 2, ",DELETED");
+    /** Start at buffer[1+ MAX_STRING_SIZE + 1 + 7 + 1] strlen("DELETED") = 7 */
+    for(size_t i = MAX_STRING_SIZE + 7 + 3 ; i <= MAX_STRING_SIZE*2 + 3; i++){
+        buffer[i] = ' ';
+    }
+    buffer[MAX_STRING_SIZE*2 + 4] = ')';
 
     while(aux != NULL){
-        write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 3);
+        write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 5);
         aux = aux->next;
     }
 }
-
 
 int write_pair(HashTable *ht, const char *key, const char *value) {
     int index = hash(key);
@@ -127,9 +136,11 @@ int delete_pair(HashTable *ht, const char *key) {
                 // Node to delete is not the first; bypass it
                 prevNode->next = keyNode->next; // Link the previous node to the next node
             }
-            // Free the memory allocated for the key and value
-            
+            // Notify clients of deletion.
+            notify_key_deletion(keyNode);
+            // Free client list.
             freeList(keyNode->client_list); 
+            // Free the memory allocated for the key and value
             free(keyNode->key);
             free(keyNode->value);
             free(keyNode); // Free the key node itself
@@ -168,28 +179,30 @@ void addClientId(List* client_list, const int notif_fd){
     client_list->head = newNode;
 }
 
-void removeClientId(List* client_list, const int notif_fd){
+int removeClientId(List* client_list, const int notif_fd){
     Node *aux = client_list->head;
 
     /** Client_list is empty. */
-    if(client_list->head == NULL) return;
+    if(client_list->head == NULL) return 1;
 
     /** Remove head. */
     if(client_list->head->notif_fd == notif_fd){
         Node *temp = client_list->head;
         client_list->head = client_list->head->next;
         free(temp);
-        return;
+        return 0;
     }
     while(aux->next != NULL){
         if(aux->next->notif_fd == notif_fd){
             Node *temp = aux->next;
             aux->next = aux->next->next;
             free(temp);
-            return;
+            return 0;
         }
         aux = aux->next;
     }
+    /** notif_fd was not found. */
+    return 1;
 }
 
 void free_table(HashTable *ht) {
@@ -198,6 +211,7 @@ void free_table(HashTable *ht) {
         while (keyNode != NULL) {
             KeyNode *temp = keyNode;
             keyNode = keyNode->next;
+            freeList(temp->client_list);
             free(temp->key);
             free(temp->value);
             free(temp);

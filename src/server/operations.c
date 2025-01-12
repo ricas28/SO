@@ -398,15 +398,15 @@ int subscribe_key(const char* key, const int notif_fd){
 }
 
 int unsubscribe_key(const char* key, const int notif_fd){
-  int index = hash(key);
+  int index = hash(key), result;
   KeyNode* keyNode = kvs_table->table[index];
 
   while (keyNode != NULL){
     if (strcmp(key, keyNode->key) == 0){
       pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
-      removeClientId(keyNode->client_list, notif_fd);
+      result = removeClientId(keyNode->client_list, notif_fd);
       pthread_rwlock_unlock(&keyNode->client_list->lockList);
-      return 0;
+      return result;
       }
 
     keyNode = keyNode->next;

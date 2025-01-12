@@ -12,7 +12,7 @@
 
 int main(int argc, char *argv[]) {
   pthread_t notifications_thread;
-  int req_fd, resp_fd, notif_fd; 
+  int req_fd, resp_fd, notif_fd, server_fd; 
 
   if (argc < 3) {
     fprintf(stderr, "Usage: %s <client_unique_id> <register_pipe_path>\n", argv[0]);
@@ -31,7 +31,8 @@ int main(int argc, char *argv[]) {
   strncat(resp_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
   strncat(notif_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
 
-  if(kvs_connect(&req_fd, &resp_fd, &notif_fd, req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]) == 1)
+  if(kvs_connect(&req_fd, &resp_fd, &notif_fd, &server_fd, 
+                req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]) == 1)
     return 1;
   
   if (pthread_create(&notifications_thread, NULL, notifications_manager, (void*)&notif_fd) != 0){
@@ -42,11 +43,11 @@ int main(int argc, char *argv[]) {
   while (1) {
     switch (get_next(STDIN_FILENO)) {
     case CMD_DISCONNECT:
-      if (kvs_disconnect(req_fd, resp_fd) != 0) {
+      if (kvs_disconnect(server_fd, req_pipe_path, resp_pipe_path) != 0) {
         fprintf(stderr, "Failed to disconnect to the server.\n");
         return 1;
       }
-      if (end_notifications_thread(notif_fd, notifications_thread) != 0) {
+      if (end_notifications_thread(notif_pipe_path, notifications_thread) != 0) {
         fprintf(stderr, "Failed to end notifications thread.\n");
         return 1;
       }
@@ -60,7 +61,7 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
-      if (kvs_subscribe(req_fd, resp_fd, keys[0])) {
+      if (kvs_subscribe(keys[0])) {
         fprintf(stderr, "Command subscribe failed\n");
       }
 
@@ -72,7 +73,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         continue;
       }
-      if (kvs_unsubscribe(req_fd, resp_fd, keys[0])) {
+      if (kvs_unsubscribe(keys[0])) {
         fprintf(stderr, "Command subscribe failed\n");
       }
 

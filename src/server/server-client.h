@@ -6,7 +6,7 @@
 #define BUFFER_SIZE 10
 
 typedef struct {
-  sem_t empty, full;
+  sem_t empty, full, active_sessions;
   pthread_mutex_t buffer_mutex;
   int write_Index;
   int read_Index;
