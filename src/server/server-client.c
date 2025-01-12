@@ -125,15 +125,24 @@ void* managing_thread_fn(void *arg){
 
   while(error == 0){
     char request_message[MAX_REGISTER_MSG]; 
-    /** Only read if there's something to read. */
+    /** Read OP CODE. */
     read_all(req_fd, request_message, 1, NULL);
     switch (request_message[0]) {
       case OP_CODE_DISCONNECT:
-        break;
+        delete_all_subscriptions(notif_fd);
+        if(write_all(resp_fd, "20", 2) == -1){
+          fprintf(stderr, "Failure to write disconnect mensage (success)\n");
+          error = 1;
+          break;
+        }
+        close(resp_fd);
+        close(req_fd);
+        close(notif_fd);
+        return NULL;
 
       case OP_CODE_SUBSCRIBE:
         if(read_all(req_fd, request_message + 1, MAX_STRING_SIZE + 1, NULL) == -1){
-          fprintf(stderr, "Failure to parse subsribe request.\n");
+          fprintf(stderr, "Failure to read subsribe request.\n");
           error = 1;
         }
         if(subscribe_key(request_message + 1, notif_fd)){
@@ -153,12 +162,12 @@ void* managing_thread_fn(void *arg){
 
       case OP_CODE_UNSUBSCRIBE:
         if(read_all(req_fd, request_message + 1, MAX_STRING_SIZE + 1, NULL) == -1){
-          fprintf(stderr, "Failure to parse subsribe request.\n");
+          fprintf(stderr, "Failure to read subsribe request.\n");
           error = 1;
         }
         if(unsubscribe_key(request_message + 1, notif_fd)){
           if(write_all(resp_fd, "41", 2) == -1){
-            fprintf(stderr, "Failure to write unsubscribe (key not found)\n");
+            fprintf(stderr, "Failure to write unsubscribe (subscription not found)\n");
             error = 1;
           }
         }
@@ -178,6 +187,7 @@ void* managing_thread_fn(void *arg){
 
   close(resp_fd);
   close(req_fd);
+  close(notif_fd);
   return NULL;
 }
 

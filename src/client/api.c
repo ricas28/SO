@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #include "src/common/constants.h"
 #include "src/common/protocol.h"
@@ -95,7 +96,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, const char* req_pipe_p
 
 int kvs_disconnect(int req_fd, int resp_fd) {
   char msg[1], result_message[2];
-  msg[0] = '2';
+  msg[0] = OP_CODE_DISCONNECT;
   /* Send the message to the request pipe. */
   if (write_all(req_fd, msg, 1) == -1){
     fprintf(stderr, "Failure writing request message for disconnect.\n");
@@ -191,7 +192,10 @@ void* notifications_manager(void *arg){
     }
 
     if(read == 0){
-      fprintf(stderr, "PIPE broken.\n");
+      /** Error reading. */
+      if(errno != 0){
+        fprintf(stderr, "PIPE broken.\n");
+      }
       break;
     }
     for(int i = 0; i < MAX_STRING_SIZE*2 + 3 + 2; i++){

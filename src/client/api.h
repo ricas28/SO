@@ -31,8 +31,7 @@ int kvs_subscribe(int req_fd, int resp_fd, const char *key);
 
 int kvs_unsubscribe(int req_fd, int resp_fd, const char *key);
 
-/// Thread open for the notifications pipe.  
-void* notifications_manager();
+void* notifications_manager(void *arg);
 
 /// Joins the notifications thread to the main thread and destroys it's pipes.
 /// @param notif_fd 
@@ -40,4 +39,4 @@ void* notifications_manager();
 /// @return 0 if successfull.
 int end_notifications_thread(int notif_fd, pthread_t notif_thread);
 
-#endif // CLIENT_API_H
+#endif

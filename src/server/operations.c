@@ -414,6 +414,35 @@ int unsubscribe_key(const char* key, const int notif_fd){
     return 1;
 }
 
+void delete_all_subscriptions(int notif_fd){
+  for(int i = 0; i < TABLE_SIZE; i++){
+    KeyNode * keyNode = kvs_table->table[i];
+    if(keyNode != NULL){
+      List *client_list = keyNode->client_list;
+      Node *aux = client_list->head;
+
+      /** Remove if list isn't empty. */
+      if(aux != NULL){
+        /** Remove head edge case. */
+        if(aux->notif_fd == notif_fd){
+          Node *temp = aux;
+          client_list->head = aux->next;
+          free(temp);
+          continue;
+        }
+        while(aux->next != NULL){
+          if(aux->next->notif_fd == notif_fd){
+            Node *temp = aux->next;
+            aux->next = aux->next->next;
+            free(temp);
+          }
+          aux = aux->next;
+        }
+      }
+    }
+  }
+}
+
 void kvs_wait(unsigned int delay_ms) {
   struct timespec delay = delay_to_timespec(delay_ms);
   nanosleep(&delay, NULL);
