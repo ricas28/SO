@@ -403,12 +403,13 @@ int unsubscribe_key(const char* key, const int notif_fd){
 
   while (keyNode != NULL){
     if (strcmp(key, keyNode->key) == 0){
-        pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
-        removeClientId(keyNode->client_list, notif_fd);
-        pthread_rwlock_unlock(&keyNode->client_list->lockList);
-        return 0;
+      pthread_rwlock_wrlock(&keyNode->client_list->lockList); 
+      removeClientId(keyNode->client_list, notif_fd);
+      pthread_rwlock_unlock(&keyNode->client_list->lockList);
+      return 0;
       }
-      keyNode = keyNode->next;
+
+    keyNode = keyNode->next;
     }
 
     return 1;
@@ -417,7 +418,7 @@ int unsubscribe_key(const char* key, const int notif_fd){
 void delete_all_subscriptions(int notif_fd){
   for(int i = 0; i < TABLE_SIZE; i++){
     KeyNode * keyNode = kvs_table->table[i];
-    if(keyNode != NULL){
+    while(keyNode != NULL){
       List *client_list = keyNode->client_list;
       Node *aux = client_list->head;
 
@@ -439,6 +440,7 @@ void delete_all_subscriptions(int notif_fd){
           aux = aux->next;
         }
       }
+      keyNode = keyNode->next;
     }
   }
 }

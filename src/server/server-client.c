@@ -218,7 +218,7 @@ void* host_thread_fn(void* arg){
     }
     /** EOF. */
     if (ret == 0){
-      fprintf(stderr, "Pipe closed.\n");
+      fprintf(stderr, "Pipe closed.\n"); // read_all problem most likely.
       free(buffer);
       break;
     }

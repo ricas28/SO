@@ -1,0 +1,6 @@
+WRITE [(z,zoo)(w,wlala)]
+WAIT 5000
+DELETE [w]
+WRITE [(w,wziiz)(x,xixi)]
+WAIT 3000
+DELETE [x,z]

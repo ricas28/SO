@@ -54,19 +54,20 @@ void notify_key_change(KeyNode *node){
     }
 }
 
-/**
+
 void notify_key_deletion(KeyNode *node){
     Node *aux = node->client_list->head;
-    size_t key_size = strlen(node->key);
+    // size_t key_size = strlen(node->key);
+
+    char buffer[MAX_STRING_SIZE + 8 + 3];
+    sprintf(buffer, "(%s,DELETED)", node->key);
 
     while(aux != NULL){
-        char buffer[MAX_STRING_SIZE*2 + 3];
-        sprintf(buffer, "(%s,DELETED)", node->key);
         write_all(aux->notif_fd, buffer, MAX_STRING_SIZE*2 + 3);
         aux = aux->next;
     }
 }
-*/
+
 
 int write_pair(HashTable *ht, const char *key, const char *value) {
     int index = hash(key);
