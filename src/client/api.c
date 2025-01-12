@@ -98,9 +98,19 @@ int kvs_disconnect(int server_fd, const char *req_pipe, const char * resp_pipe) 
   }
 
   /* Receive the message from the response pipe. */
-  if (read_all(_resp_fd, result_message, 2, NULL) == -1){
+  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
+  if (ret == -1){
+    if(errno == EBADF){
+      printf("Ending client.\n");
+      return 2;
+    }
     fprintf(stderr, "Failure reading result message for disconnect.\n");
     return 1;
+  }
+  /** EOF */
+  else if(ret == 0){
+    printf("Ending client.\n");
+    return 2;
   }
 
   printf("Server returned %c for operation: disconnect.\n", result_message[1]);
@@ -131,14 +141,24 @@ int kvs_subscribe(const char *key) {
 
   /* Write the key meant to subscribe into the request pipe. */
   if(write_all(_req_fd, send_message, MAX_STRING_SIZE + 2) == -1){
+    if(errno == EBADF){
+      printf("Ending client.\n");
+      return 2;
+    }
     fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
     return 1;
   }
 
   /* Read the response from the response pipe. */
-  if(read_all(_resp_fd, result_message, 2, NULL) == -1){
+  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
+  if(ret == -1){
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
+  }
+  /** EOF */
+  else if(ret == 0){
+    printf("Ending client.\n");
+    return 2;
   }
 
   printf("Server returned %c for operation: subscribe\n", result_message[1]);
@@ -160,14 +180,24 @@ int kvs_unsubscribe(const char *key) {
 
   /* Write the key meant to subscribe into the request pipe. */
   if(write_all(_req_fd, send_message, MAX_STRING_SIZE+2) == -1){
+    if(errno == EBADF){
+      printf("Ending client.\n");
+      return 2;
+    }
     fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
     return 1;
   }
 
   /* Read the response from the response pipe. */
-  if(read_all(_resp_fd, result_message, 2, NULL) == -1){
+  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
+  if(ret == -1){
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
+  }
+  /** EOF */
+  else if(ret == 0){
+    printf("Ending client.\n");
+    return 2;
   }
 
   printf("Server returned %c for operation: unsubscribe\n", result_message[1]);

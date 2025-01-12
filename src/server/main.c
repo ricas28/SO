@@ -109,6 +109,10 @@ int main(int argc, char** argv) {
   for(int i = 0; i < MAX_SESSION_COUNT; i++){
     if(pthread_join(managing_threads[i], NULL) != 0){
       fprintf(stderr, "Failed to join managing thread %d\n", i);
+      kvs_terminate();
+      closedir(pDir);
+      destroy_server_data(server_data);
+      return 1;
     }
   }
   

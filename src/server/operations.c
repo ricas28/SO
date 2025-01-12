@@ -415,7 +415,7 @@ int unsubscribe_key(const char* key, const int notif_fd){
     return 1;
 }
 
-void delete_all_subscriptions(int notif_fd){
+void delete_client_subscriptions(int notif_fd){
   for(int i = 0; i < TABLE_SIZE; i++){
     KeyNode * keyNode = kvs_table->table[i];
     while(keyNode != NULL){
@@ -440,6 +440,16 @@ void delete_all_subscriptions(int notif_fd){
           aux = aux->next;
         }
       }
+      keyNode = keyNode->next;
+    }
+  }
+}
+
+void delete_all_subscriptions(){
+  for(int i = 0; i < TABLE_SIZE; i++){
+    KeyNode * keyNode = kvs_table->table[i];
+    while(keyNode != NULL){
+      freeList(keyNode->client_list);
       keyNode = keyNode->next;
     }
   }

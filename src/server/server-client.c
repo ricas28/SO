@@ -18,6 +18,8 @@
 #include "server-client.h"
 #include "operations.h"
 
+int _SIGUSR1_received = 0;
+
 Server_data *new_server_data(){
   Server_data *new_thread = (Server_data*)malloc(sizeof(Server_data));
 
@@ -48,10 +50,68 @@ Server_data *new_server_data(){
     destroy_server_data(new_thread);
     return NULL;
   }
+  if(pthread_mutex_init(&new_thread->client_list_mutex, NULL) != 0){
+    fprintf(stderr, "Failure to initalize client list mutex.\n");
+    destroy_server_data(new_thread);
+    return NULL;
+  }
 
+  new_thread->client_head = NULL;
   new_thread->write_Index = 0;
   new_thread->read_Index = 0;
   return new_thread;
+}
+
+void add_client(Client_Node *head, int req_fd, int resp_fd, int notif_fd){
+  Client_Node *node = (Client_Node*)malloc(sizeof(Client_Node));
+
+  node->req_fd = req_fd;
+  node->resp_fd = resp_fd;
+  node->notif_fd = notif_fd;
+  node->next = head;
+  head = node;
+}
+
+int equal_fds(Client_Node *node, int req_fd, int resp_fd, int notif_fd){
+  if(node == NULL) return 0;
+
+  return node->req_fd == req_fd && 
+        node->resp_fd == resp_fd &&
+        node->notif_fd == notif_fd;
+}
+
+void remove_client(Client_Node *head, int req_fd, int resp_fd, int notif_fd){
+  Client_Node *aux = head;
+
+  if(head == NULL) return;
+
+  /** Remove head. */
+  if(equal_fds(head, req_fd, resp_fd, notif_fd)){
+    Client_Node *temp = head->next;
+    free(head);
+    head = temp;
+  }
+  /** Remove on the middle. */
+  while(aux->next != NULL){
+    if(equal_fds(aux->next, req_fd, resp_fd, notif_fd)){
+      Client_Node *temp = aux->next;
+      aux->next = aux->next->next;
+      free(temp);
+      return;
+    }
+    aux = aux->next;
+  }
+}
+
+void close_all_clients(Client_Node *head){
+  while(head != NULL){
+    Client_Node *temp = head->next;
+    close(head->req_fd);
+    close(head->resp_fd);
+    close(head->notif_fd);
+    free(head);
+    head = temp;
+  }
 }
 
 void destroy_server_data(Server_data *server_data){
@@ -60,6 +120,8 @@ void destroy_server_data(Server_data *server_data){
     sem_destroy(&server_data->full);
     sem_destroy(&server_data->active_sessions);
     pthread_mutex_destroy(&server_data->buffer_mutex);
+    pthread_mutex_destroy(&server_data->client_list_mutex);
+    close_all_clients(server_data->client_head);
     free(server_data);
   }
 }
@@ -121,11 +183,14 @@ int open_pipes(int *req_fd, int *resp_fd, int *notif_fd,
   return 0;
 }
 
-void client_disconnect(int req_fd, int resp_fd, int notif_fd, sem_t *active_sessions, int *connected){
+void client_disconnect(int req_fd, int resp_fd, int notif_fd, Server_data *server_data, int *connected){
   close(req_fd);
   close(resp_fd);
   close(notif_fd);
-  sem_post(active_sessions);
+  sem_post(&server_data->active_sessions);
+  pthread_mutex_lock(&server_data->client_list_mutex);
+  remove_client(server_data->client_head, req_fd, resp_fd, notif_fd);
+  pthread_mutex_unlock(&server_data->client_list_mutex);
   *connected = 0;
 }
 
@@ -136,6 +201,11 @@ void* managing_thread_fn(void *arg){
   char req_pipe[MAX_PIPE_PATH_LENGTH];
   char resp_pipe[MAX_PIPE_PATH_LENGTH];
   char notif_pipe[MAX_PIPE_PATH_LENGTH];
+  sigset_t mask;
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
   while(error == 0){
     error = 0;
@@ -149,24 +219,31 @@ void* managing_thread_fn(void *arg){
 
     if(open_pipes(&req_fd, &resp_fd, &notif_fd, req_pipe, resp_pipe, notif_pipe)) return NULL;
 
+    /** Add client to current clients list. */
+    pthread_mutex_lock(&server_data->client_list_mutex);
+    add_client(server_data->client_head, req_fd, resp_fd, notif_fd);
+    pthread_mutex_unlock(&server_data->client_list_mutex);
+
     while(error == 0 && connected){
       char request_message[MAX_REGISTER_MSG]; 
       /** Read OP CODE. */
       ssize_t ret = read_all(req_fd, request_message, 1, NULL);
       /** Client sudden disconnect. */
       if(ret == 0 && errno == 0){
-        client_disconnect(req_fd, resp_fd, notif_fd, &server_data->active_sessions, &connected);
+        client_disconnect(req_fd, resp_fd, notif_fd, server_data, &connected);
         break;
       }
       switch (request_message[0]) {
         case OP_CODE_DISCONNECT:
-          delete_all_subscriptions(notif_fd);
+          delete_client_subscriptions(notif_fd);
           if(write_all(resp_fd, "20", 2) == -1){
-            fprintf(stderr, "Failure to write disconnect mensage (success)\n");
-            error = 1;
+            if(errno != EBADF){
+              fprintf(stderr, "Failure to write disconnect mensage (success)\n");
+              error = 1;
+            }
             break;
           }
-          client_disconnect(req_fd, resp_fd, notif_fd, &server_data->active_sessions, &connected);
+          client_disconnect(req_fd, resp_fd, notif_fd, server_data, &connected);
           break;
 
         case OP_CODE_SUBSCRIBE:
@@ -177,14 +254,18 @@ void* managing_thread_fn(void *arg){
           if(subscribe_key(request_message + 1, notif_fd)){
             /** Key was nout found. */
             if(write_all(resp_fd, "30", 2) == -1){
-              fprintf(stderr, "Failure to write subscribe (Key not found).\n");
-              error = 1;
+              if(errno != EBADF){
+                fprintf(stderr, "Failure to write subscribe (Key not found).\n");
+                error = 1;
+              }
             }
           }
           else{
             if(write_all(resp_fd, "31", 2) == -1){
-              fprintf(stderr, "Failure to write subscribe (success).\n");
-              error = 1;
+              if(errno != EBADF){
+                fprintf(stderr, "Failure to write subscribe (success).\n");
+                error = 1;
+              }
             }
           }
           break;
@@ -196,14 +277,18 @@ void* managing_thread_fn(void *arg){
           }
           if(unsubscribe_key(request_message + 1, notif_fd)){
             if(write_all(resp_fd, "41", 2) == -1){
-              fprintf(stderr, "Failure to write unsubscribe (subscription not found)\n");
-              error = 1;
+              if(errno != EBADF){
+                fprintf(stderr, "Failure to write unsubscribe (subscription not found)\n");
+                error = 1;
+              }
             }
           }
           else{
             if(write_all(resp_fd, "40", 2) == -1){
-              fprintf(stderr, "Failure to unsubscribe (success).\n");
-              error = 1;
+              if(errno != EBADF){
+                fprintf(stderr, "Failure to unsubscribe (success).\n");
+                error = 1;
+              }
             }
           }
           break;
@@ -215,12 +300,13 @@ void* managing_thread_fn(void *arg){
     }
   }
 
-  client_disconnect(req_fd, resp_fd, notif_fd, &server_data->active_sessions, &connected);
+  client_disconnect(req_fd, resp_fd, notif_fd, server_data, &connected);
   return NULL;
 }
 
 void handle_SIGUSR1(int signum){
-
+  (void)signum; /** To supress warning. */
+  _SIGUSR1_received = 1;
 }
 
 void* host_thread_fn(void* arg){
@@ -240,6 +326,15 @@ void* host_thread_fn(void* arg){
   while (1) {
     char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
     ssize_t ret;
+
+    /** Handle SIGUSR1. */
+    if(_SIGUSR1_received){
+      delete_all_subscriptions();
+      pthread_mutex_lock(&host_thread->server_data->client_list_mutex);
+      close_all_clients(host_thread->server_data->client_head);
+      pthread_mutex_unlock(&host_thread->server_data->client_list_mutex);
+      _SIGUSR1_received = 0;
+    }
   
     if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, NULL)) == -1){
       fprintf(stderr, "Failure reading from register FIFO.\n");
@@ -266,7 +361,6 @@ void* host_thread_fn(void* arg){
     }
     free(buffer);
   }
-  
   
   close(fifo_fd);
   return NULL;

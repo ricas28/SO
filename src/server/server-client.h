@@ -5,9 +5,15 @@
 
 #define BUFFER_SIZE 10
 
+typedef struct Client_Node{
+  int req_fd, resp_fd, notif_fd;
+  struct Client_Node *next; 
+}Client_Node;
+
 typedef struct {
   sem_t empty, full, active_sessions;
-  pthread_mutex_t buffer_mutex;
+  pthread_mutex_t buffer_mutex, client_list_mutex;
+  Client_Node *client_head;
   int write_Index;
   int read_Index;
   char buffer[BUFFER_SIZE][MAX_REGISTER_MSG];

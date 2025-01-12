@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <signal.h>
 
 #include "constants.h"
 #include "src/common/constants.h"
@@ -51,6 +52,11 @@ void *process_file(void *arg){
   size_t num_pairs;
   size_t backups_done = 0;
   int read_fd, write_fd;
+  sigset_t mask;
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
   /** Build relative path of file. */
   char file_directory[thread_data->file->path_size];

@@ -194,10 +194,10 @@ int removeClientId(List* client_list, const int notif_fd){
     }
     while(aux->next != NULL){
         if(aux->next->notif_fd == notif_fd){
-            Node *temp = aux->next;
-            aux->next = aux->next->next;
-            free(temp);
-            return 0;
+          Node *temp = aux->next;
+          aux->next = aux->next->next;
+          free(temp);
+          return 0;
         }
         aux = aux->next;
     }

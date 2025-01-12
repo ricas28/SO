@@ -92,7 +92,9 @@ int subscribe_key(const char* key, const int notif_fd);
 
 int unsubscribe_key(const char* key, const int notif_fd);
 
-void delete_all_subscriptions(int notif_fd);
+void delete_client_subscriptions(int notif_fd);
+
+void delete_all_subscriptions();
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
