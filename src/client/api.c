@@ -94,7 +94,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, const char* req_pipe_p
 }
 
 int kvs_disconnect(int req_fd, int resp_fd) {
-  char msg[1];
+  char msg[1], result_message[2];
   msg[0] = '2';
   /* Send the message to the request pipe. */
   if (write_all(req_fd, msg, 1) == -1){
@@ -103,12 +103,12 @@ int kvs_disconnect(int req_fd, int resp_fd) {
   }
 
   /* Receive the message from the response pipe. */
-  if (read_all(resp_fd, msg, 1, NULL) == -1){
+  if (read_all(resp_fd, result_message, 2, NULL) == -1){
     fprintf(stderr, "Failure reading result message for disconnect.\n");
     return 1;
   }
 
-  printf("Server returned %c for operation: disconnect.\n", msg[1]);
+  printf("Server returned %c for operation: disconnect.\n", result_message[1]);
 
   /* Close the FIFOs. */
   close(req_fd);
