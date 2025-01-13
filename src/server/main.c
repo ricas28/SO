@@ -31,6 +31,15 @@ int main(int argc, char** argv) {
   pthread_t host_thread, managing_threads[MAX_SESSION_COUNT];
   Server_data *server_data;
   Host_thread host_thread_data;
+  struct sigaction sa;
+  sa.sa_handler = handle_SIGUSR1;
+  sa.sa_flags = 0;
+  sigemptyset(&sa.sa_mask);
+
+  if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+    perror("sigaction");
+    return 1;
+  }
 
   if (kvs_init()) {
     fprintf(stderr, "Failed  to initialize KVS\n");
