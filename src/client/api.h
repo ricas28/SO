@@ -40,4 +40,11 @@ void* notifications_manager(void *arg);
 /// @return 0 if successfull.
 int end_notifications_thread(const char *notif_pipe, pthread_t notif_thread);
 
-#endif
+/// Closes and unlinks pipes after server disconnected the client.
+/// @param server_fd
+/// @param req_pipe 
+/// @param resp_pipe
+/// @return return 0 if successfull, 1 otherwise.
+int server_disconnected(int server_fd, const char *req_pipe, const char *resp_pipe);
+
+#endif //CLIENT_API_H

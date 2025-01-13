@@ -96,7 +96,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, int *server_fd, const 
   return 0;
 }
 
-int kvs_disconnect(int server_fd, const char *req_pipe, const char * resp_pipe) {
+int kvs_disconnect(int server_fd, const char *req_pipe, const char *resp_pipe) {
   char msg[1], result_message[2];
   msg[0] = OP_CODE_DISCONNECT;
   /* Send the message to the request pipe. */
@@ -237,5 +237,16 @@ int end_notifications_thread(const char *notif_pipe, pthread_t notif_thread){
   close(_notif_fd);
   unlink(notif_pipe);
   pthread_join(notif_thread, NULL);
+  return 0;
+}
+
+int server_disconnected(int server_fd, const char *req_pipe, const char *resp_pipe){
+  /* Close the FIFOs. */
+  close(_req_fd);
+  close(_resp_fd);
+  close(server_fd);
+  /* Erase the FIFOs. */
+  unlink(req_pipe);
+  unlink(resp_pipe);
   return 0;
 }

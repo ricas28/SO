@@ -13,6 +13,7 @@
 int main(int argc, char *argv[]) {
   pthread_t notifications_thread;
   int req_fd, resp_fd, notif_fd, server_fd; 
+  int res;
 
   if (argc < 3) {
     fprintf(stderr, "Usage: %s <client_unique_id> <register_pipe_path>\n", argv[0]);
@@ -37,19 +38,26 @@ int main(int argc, char *argv[]) {
   if (pthread_create(&notifications_thread, NULL, notifications_manager, (void*)&notif_fd) != 0){
     fprintf(stderr, "ERROR: Unable to create notifications thread.\n");
     return 1;
-  } 
+  }
 
   while (1) {
     switch (get_next(STDIN_FILENO)) {
     case CMD_DISCONNECT:
-      if (kvs_disconnect(server_fd, req_pipe_path, resp_pipe_path) != 0) {
+      if ((res = kvs_disconnect(server_fd, req_pipe_path, resp_pipe_path)) == 1) {
         fprintf(stderr, "Failed to disconnect to the server.\n");
         return 1;
       }
-      if (end_notifications_thread(notif_pipe_path, notifications_thread) != 0) {
-        fprintf(stderr, "Failed to end notifications thread.\n");
-        return 1;
+      else if (res == 2){
+        if (server_disconnected(server_fd, req_pipe_path, resp_pipe_path) != 0){
+          fprintf(stderr, "Failed to close and unlink pipes.\n");
+        }
+        if (end_notifications_thread(notif_pipe_path, notifications_thread) != 0) {
+          fprintf(stderr, "Failed to end notifications thread.\n");
+          return 1;
+        }
+        printf("Server terminated the connection.\n");
       }
+      
       printf("Disconnected from server.\n");
       return 0;
 
@@ -59,11 +67,19 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         continue;
       }
-
-      if (kvs_subscribe(keys[0])) {
+      if ((res = kvs_subscribe(keys[0])) == 1) {
         fprintf(stderr, "Command subscribe failed\n");
       }
-
+      else if (res == 2){
+        if (server_disconnected(server_fd, req_pipe_path, resp_pipe_path) != 0){
+          fprintf(stderr, "Failed to close and unlink pipes.\n");
+        }
+        if (end_notifications_thread(notif_pipe_path, notifications_thread) != 0) {
+          fprintf(stderr, "Failed to end notifications thread.\n");
+          return 1;
+        }
+        printf("Server terminated the conection.\n");
+      }
       break;
 
     case CMD_UNSUBSCRIBE:
@@ -72,10 +88,20 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         continue;
       }
-      if (kvs_unsubscribe(keys[0])) {
-        fprintf(stderr, "Command subscribe failed\n");
+      if ((res = kvs_unsubscribe(keys[0])) == 1) {
+        fprintf(stderr, "Command unsubscribe failed.\n");
       }
-
+      else if (res == 2){
+        if (server_disconnected(server_fd, req_pipe_path, resp_pipe_path) != 0){
+          fprintf(stderr, "Failed to close and unlink pipes.\n");
+        }
+        if (end_notifications_thread(notif_pipe_path, notifications_thread) != 0) {
+          fprintf(stderr, "Failed to end notifications thread.\n");
+          return 1;
+        }
+        printf("Server terminated the conection.\n");
+        return 1;
+      }
       break;
 
     case CMD_DELAY:
