@@ -83,17 +83,23 @@ int create_backup_file(char file_name[], size_t backup_number);
 /// @return 0 if the backup was successful, 1 otherwise.
 int kvs_backup(char file_name[], size_t* backups_done, size_t *backups_left, pthread_mutex_t *backup_mutex);
 
-/// Adds the client to the binary tree of clients associated to the key.
-/// @param ht Hash table in use.
+/// Subscribes a client to the given key.
 /// @param key Key of the pair to be subscribed.
-/// @param client_id Id of the client subscribing.
+/// @param notif_fd Fd of the client's notification FIFO.
 /// @return 0 if successfull, 1 otherwise.
 int subscribe_key(const char* key, const int notif_fd);
 
+/// Unsubscribes a client to the given key.
+/// @param key Key of the pair to be unsubscribed.
+/// @param notif_fd Fd of the client's notification FIFO.
+/// @return 0 if successfull, 1 otherwise.
 int unsubscribe_key(const char* key, const int notif_fd);
 
+/// Deletes every subscription of a client.
+/// @param notif_fd Fd of the client's notification FIFO.
 void delete_client_subscriptions(int notif_fd);
 
+/// Deletes every subscription on the KVS server.
 void delete_all_subscriptions();
 
 /// Waits for a given amount of time.

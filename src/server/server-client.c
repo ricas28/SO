@@ -62,6 +62,10 @@ Server_data *new_server_data(){
   return new_thread;
 }
 
+/// Adds a client to the connected clients list.
+/// @param head Head of the list.
+/// @param resp_fd Fd of the client's response FIFO.
+/// @param notif_fd Fd of the client's notification FIFO.
 void add_client(Client_Node **head, int resp_fd, int notif_fd){
   Client_Node *node = (Client_Node*)malloc(sizeof(Client_Node));
 
@@ -71,6 +75,11 @@ void add_client(Client_Node **head, int resp_fd, int notif_fd){
   *head = node;
 }
 
+/// Checks if the fd's on a Client_Node are equal to the given.
+/// @param node CLient_Node.
+/// @param resp_fd Fd.
+/// @param notif_fd Fd.
+/// @return TRUE if equal, FALSE otherwise.
 int equal_fds(Client_Node *node, int resp_fd, int notif_fd){
   if(node == NULL) return 0;
 
@@ -78,6 +87,10 @@ int equal_fds(Client_Node *node, int resp_fd, int notif_fd){
          node->notif_fd == notif_fd;
 }
 
+/// Removes a client from the connected clients list.
+/// @param head Pointer to the head of the list.
+/// @param resp_fd Fd of the client's response FIFO.
+/// @param notif_fd Fd of the client's notification FIFO.
 void remove_client(Client_Node **head, int resp_fd, int notif_fd){
   Client_Node *aux = *head;
 
@@ -102,6 +115,8 @@ void remove_client(Client_Node **head, int resp_fd, int notif_fd){
   }
 }
 
+/// Closes every clients fd's.
+/// @param head Head of the connected clients list.
 void close_all_clients(Client_Node *head){
   while(head != NULL){
     Client_Node *temp = head->next;
@@ -112,6 +127,8 @@ void close_all_clients(Client_Node *head){
   }
 }
 
+/// Destroys a Server_data struct.
+/// @param server_data pointer to a Server_data struct.
 void destroy_server_data(Server_data *server_data){
   if (server_data) {
     sem_destroy(&server_data->empty);
@@ -123,6 +140,9 @@ void destroy_server_data(Server_data *server_data){
   }
 }
 
+/// Consumes a message from the request buffer.
+/// @param server_data Server_data.
+/// @return Read message.
 char* consume_request(Server_data *server_data){
   char* request_message = (char*)malloc(MAX_REGISTER_MSG*sizeof(char));
   
@@ -136,6 +156,9 @@ char* consume_request(Server_data *server_data){
   return request_message;
 }
 
+/// Procudes a request on the request buffer.
+/// @param server_data Server_data.
+/// @param message Message to be put on the buffer.
 void produce_request(Server_data *server_data, char *message){
   /** Wait until there's space to put message. */
   sem_wait(&server_data->empty);
@@ -147,6 +170,14 @@ void produce_request(Server_data *server_data, char *message){
   sem_post(&server_data->full);
 }
 
+/// Opens every FIFO's a client has.
+/// @param req_fd Pointer to fd of the client's request FIFO.
+/// @param resp_fd Pointer to fd of the client's response FIFO.
+/// @param notif_fd Pointer to fd of the client's notification FIFO.
+/// @param req_pipe Path for the client's request FIFO.
+/// @param resp_pipe Path for the client's response FIFO.
+/// @param notif_pipe Path for the client's notification FIFO.
+/// @return 0 if successful, 1 otherwise.
 int open_pipes(int *req_fd, int *resp_fd, int *notif_fd,
           const char *req_pipe, const char *resp_pipe, const char *notif_pipe){
   /** Open response pipe. */
@@ -180,6 +211,12 @@ int open_pipes(int *req_fd, int *resp_fd, int *notif_fd,
   return 0;
 }
 
+/// Removes every information of the client from the server.
+/// @param req_fd Fd of the client's request FIFO.
+/// @param resp_fd Fd of the client's response FIFO.
+/// @param notif_fd Fd of the client's notification FIFO.
+/// @param server_data Server data.
+/// @param connected Pointer to int that represents the client's connection status.
 void client_disconnect(int req_fd, int resp_fd, int notif_fd, Server_data *server_data, int *connected){
   close(req_fd);
   close(resp_fd);

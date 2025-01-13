@@ -29,9 +29,11 @@ int kvs_subscribe(const char *key);
 /// @param key Key to be unsubscribed
 /// @return 0 if the key was unsubscribed successfully  (subscription existed
 /// and was removed), 1 otherwise.
-
 int kvs_unsubscribe(const char *key);
 
+/// Thread for receiving changes on subscribed keys.
+/// @param arg 
+/// @return NULL.
 void* notifications_manager(void *arg);
 
 /// Joins the notifications thread to the main thread and destroys it's pipes.

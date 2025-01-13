@@ -36,6 +36,8 @@ Server_data *new_server_data();
 /// @param server_data 
 void destroy_server_data(Server_data *server_data);
 
+/// Handles a SIGUSR1 signal.
+/// @param signum 
 void handle_SIGUSR1(int signum);
 
 /// Thread function for conecting a client to the server.
