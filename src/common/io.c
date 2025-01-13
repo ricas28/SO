@@ -20,6 +20,7 @@ int read_all(int fd, void *buffer, size_t size, int *intr) {
     if (result == -1) {
       if (errno == EINTR) {
         if (intr != NULL) {
+          printf("here.\n");
           *intr = 1;
           if (bytes_read == 0) {
             return -1;

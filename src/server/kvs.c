@@ -154,15 +154,7 @@ int delete_pair(HashTable *ht, const char *key) {
 }
 
 void freeList(List* list){
-    Node* tmp = list->head;
-    Node* prev = NULL;
-
-    if(list->head == NULL) return;
-    while(tmp != NULL){
-        prev = tmp;
-        tmp = tmp->next;
-        free(prev);
-    }
+    freeClientNodes(list);
     pthread_rwlock_destroy(&list->lockList);
     free(list);
 }
@@ -219,4 +211,16 @@ void free_table(HashTable *ht) {
         }
     }
     free(ht);
+}
+
+void freeClientNodes(List* list){
+    Node* tmp = list->head;
+    Node* prev = NULL;
+
+    if(list->head == NULL) return;
+    while(tmp != NULL){
+        prev = tmp;
+        tmp = tmp->next;
+        free(prev);
+    }
 }

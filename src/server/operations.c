@@ -418,11 +418,10 @@ int unsubscribe_key(const char* key, const int notif_fd){
 void delete_client_subscriptions(int notif_fd){
   for(int i = 0; i < TABLE_SIZE; i++){
     KeyNode * keyNode = kvs_table->table[i];
+    pthread_rwlock_wrlock(&keyNode->client_list->lockList);
     while(keyNode != NULL){
       List *client_list = keyNode->client_list;
       Node *aux = client_list->head;
-
-      pthread_rwlock_wrlock(&keyNode->client_list->lockList);
       /** Remove if list isn't empty. */
       if(aux != NULL){
         /** Remove head edge case. */
@@ -441,9 +440,11 @@ void delete_client_subscriptions(int notif_fd){
           aux = aux->next;
         }
       }
-      keyNode = keyNode->next;
       pthread_rwlock_unlock(&keyNode->client_list->lockList);
+      keyNode = keyNode->next;
+      pthread_rwlock_wrlock(&keyNode->client_list->lockList);
     }
+    pthread_rwlock_unlock(&keyNode->client_list->lockList);
   }
 }
 
@@ -452,9 +453,10 @@ void delete_all_subscriptions(){
     KeyNode * keyNode = kvs_table->table[i];
     pthread_rwlock_wrlock(&keyNode->client_list->lockList);
     while(keyNode != NULL){
-      freeList(keyNode->client_list);
-      keyNode = keyNode->next;
+      freeClientNodes(keyNode->client_list);
       pthread_rwlock_unlock(&keyNode->client_list->lockList);
+      keyNode = keyNode->next;
+      pthread_rwlock_wrlock(&keyNode->client_list->lockList);
     }
     pthread_rwlock_unlock(&keyNode->client_list->lockList);
   }

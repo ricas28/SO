@@ -248,7 +248,7 @@ void* managing_thread_fn(void *arg){
             error = 1;
           }
           if(subscribe_key(request_message + 1, notif_fd)){
-            /** Key was nout found. */
+            /** Key was not found. */
             if(write_all(resp_fd, "30", 2) == -1){
               if(errno != EBADF){
                 fprintf(stderr, "Failure to write subscribe (Key not found).\n");
