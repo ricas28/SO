@@ -31,8 +31,7 @@ int main(int argc, char *argv[]) {
   strncat(resp_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
   strncat(notif_pipe_path, argv[1], strlen(argv[1]) * sizeof(char));
 
-  if(kvs_connect(&req_fd, &resp_fd, &notif_fd, &server_fd, 
-                req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]) == 1)
+  if(kvs_connect(&req_fd, &resp_fd, &notif_fd, &server_fd, req_pipe_path, resp_pipe_path, notif_pipe_path, argv[2]) == 1)
     return 1;
   
   if (pthread_create(&notifications_thread, NULL, notifications_manager, (void*)&notif_fd) != 0){

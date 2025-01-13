@@ -57,6 +57,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, int *server_fd, const 
   /** Open response FIFO. */
   if((*resp_fd = open(resp_pipe_path, O_RDONLY)) == -1){
     fprintf(stderr, "Failure to open response pipe.\n");
+    close(*server_fd);
     return 1;
   }
   _resp_fd = *resp_fd;
@@ -64,6 +65,7 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, int *server_fd, const 
   if((*req_fd = open(req_pipe_path, O_WRONLY)) == -1){
     fprintf(stderr, "Failure to open request pipe.\n");
     close(*resp_fd);
+    close(*server_fd);
     return 1;
   }
   _req_fd = *req_fd;
@@ -72,15 +74,21 @@ int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, int *server_fd, const 
     fprintf(stderr, "Failure to open notification pipe.\n");
     close(*resp_fd);
     close(*req_fd);
+    close(*server_fd);
     return 1;
   }
   _notif_fd = *notif_fd;
   /** Read result mensage. */
-  if(read_all(*resp_fd, result_message, 2, NULL) == -1){
+  int ret;
+  if((ret = read_all(*resp_fd, result_message, 2, NULL)) == -1){
+    if(ret == 0 && errno == 0){
+      printf("Ending client.\n");
+    }
     fprintf(stderr, "Failure reading result message for connect.\n");
     close(*resp_fd);
     close(*req_fd);
     close(*notif_fd);
+    close(*server_fd);
     return 1;
   }
 
@@ -98,19 +106,14 @@ int kvs_disconnect(int server_fd, const char *req_pipe, const char * resp_pipe) 
   }
 
   /* Receive the message from the response pipe. */
-  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
-  if (ret == -1){
-    if(errno == EBADF){
+  int ret;
+  if((ret = read_all(_resp_fd, result_message, 2, NULL)) == -1){
+    if(ret == 0 && errno == 0){
       printf("Ending client.\n");
       return 2;
     }
     fprintf(stderr, "Failure reading result message for disconnect.\n");
     return 1;
-  }
-  /** EOF */
-  else if(ret == 0){
-    printf("Ending client.\n");
-    return 2;
   }
 
   printf("Server returned %c for operation: disconnect.\n", result_message[1]);
@@ -141,24 +144,19 @@ int kvs_subscribe(const char *key) {
 
   /* Write the key meant to subscribe into the request pipe. */
   if(write_all(_req_fd, send_message, MAX_STRING_SIZE + 2) == -1){
-    if(errno == EBADF){
-      printf("Ending client.\n");
-      return 2;
-    }
     fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
     return 1;
   }
 
   /* Read the response from the response pipe. */
-  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
-  if(ret == -1){
+  int ret;
+  if((ret = read_all(_resp_fd, result_message, 2, NULL)) == -1){
+    if(ret == 0 && errno == 0){
+      printf("Ending client.\n");
+      return 2;
+    }
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
-  }
-  /** EOF */
-  else if(ret == 0){
-    printf("Ending client.\n");
-    return 2;
   }
 
   printf("Server returned %c for operation: subscribe\n", result_message[1]);
@@ -180,24 +178,19 @@ int kvs_unsubscribe(const char *key) {
 
   /* Write the key meant to subscribe into the request pipe. */
   if(write_all(_req_fd, send_message, MAX_STRING_SIZE+2) == -1){
-    if(errno == EBADF){
-      printf("Ending client.\n");
-      return 2;
-    }
     fprintf(stderr, "ERROR: Failure writing (the key) into the request pipe.\n");
     return 1;
   }
 
   /* Read the response from the response pipe. */
-  ssize_t ret = read_all(_resp_fd, result_message, 2, NULL);
-  if(ret == -1){
+  int ret;
+  if((ret = read_all(_resp_fd, result_message, 2, NULL)) == -1){
+    if(ret == 0 && errno == 0){
+      printf("Ending client.\n");
+      return 2;
+    }
     fprintf(stderr, "ERROR: Failure reading from the response pipe.\n");
     return 1;
-  }
-  /** EOF */
-  else if(ret == 0){
-    printf("Ending client.\n");
-    return 2;
   }
 
   printf("Server returned %c for operation: unsubscribe\n", result_message[1]);
@@ -211,11 +204,17 @@ void* notifications_manager(void *arg){
   char buffer[MAX_STRING_SIZE*2 + 3 + 2];
 
   while(1){
-    if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 5, NULL)) == -1){
+    int intr = 0;
+    if((read = read_all(*notif_fd, buffer, MAX_STRING_SIZE*2 + 5, &intr)) == -1 && intr == 0){
       fprintf(stderr, "Failure to read from notification pipe.\n");
       break;
     }
 
+    /** Read was interrompted. */
+    if(intr && read == -1){
+      printf("Ending client.\n");
+      return NULL;
+    }
     if(read == 0){
       /** Error reading. */
       if(errno != 0){
@@ -223,6 +222,7 @@ void* notifications_manager(void *arg){
       }
       break;
     }
+
     for(int i = 0; i < MAX_STRING_SIZE*2 + 3 + 2; i++){
       if(buffer[i] != ' '){
         printf("%c", buffer[i]);

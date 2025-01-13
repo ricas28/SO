@@ -18,8 +18,7 @@
 #include "server-client.h"
 #include "operations.h"
 
-Client_Node *_client_head = NULL;
-pthread_mutex_t _client_mutex = PTHREAD_MUTEX_INITIALIZER;
+int _SIGSUSR1_received = 0;
 
 Server_data *new_server_data(){
   Server_data *new_thread = (Server_data*)malloc(sizeof(Server_data));
@@ -51,44 +50,48 @@ Server_data *new_server_data(){
     destroy_server_data(new_thread);
     return NULL;
   }
+  if(pthread_mutex_init(&new_thread->client_mutex, NULL) != 0){
+    fprintf(stderr, "Failure to initialize client list mutex.\n");
+    destroy_server_data(new_thread);
+    return NULL;
+  }
 
+  new_thread->client_head = NULL;
   new_thread->write_Index = 0;
   new_thread->read_Index = 0;
   return new_thread;
 }
 
-void add_client(Client_Node *head, int req_fd, int resp_fd, int notif_fd){
+void add_client(Client_Node *head, int resp_fd, int notif_fd){
   Client_Node *node = (Client_Node*)malloc(sizeof(Client_Node));
 
-  node->req_fd = req_fd;
   node->resp_fd = resp_fd;
   node->notif_fd = notif_fd;
   node->next = head;
   head = node;
 }
 
-int equal_fds(Client_Node *node, int req_fd, int resp_fd, int notif_fd){
+int equal_fds(Client_Node *node, int resp_fd, int notif_fd){
   if(node == NULL) return 0;
 
-  return node->req_fd == req_fd && 
-        node->resp_fd == resp_fd &&
-        node->notif_fd == notif_fd;
+  return node->resp_fd == resp_fd &&
+         node->notif_fd == notif_fd;
 }
 
-void remove_client(int req_fd, int resp_fd, int notif_fd){
-  Client_Node *aux = _client_head;
+void remove_client(Client_Node *head, int resp_fd, int notif_fd){
+  Client_Node *aux = head;
 
-  if(_client_head == NULL) return;
+  if(head == NULL) return;
 
   /** Remove head. */
-  if(equal_fds(_client_head, req_fd, resp_fd, notif_fd)){
-    Client_Node *temp = _client_head->next;
-    free(_client_head);
-    _client_head = temp;
+  if(equal_fds(head, resp_fd, notif_fd)){
+    Client_Node *temp = head->next;
+    free(head);
+    head = temp;
   }
   /** Remove on the middle. */
   while(aux->next != NULL){
-    if(equal_fds(aux->next, req_fd, resp_fd, notif_fd)){
+    if(equal_fds(aux->next, resp_fd, notif_fd)){
       Client_Node *temp = aux->next;
       aux->next = aux->next->next;
       free(temp);
@@ -98,14 +101,13 @@ void remove_client(int req_fd, int resp_fd, int notif_fd){
   }
 }
 
-void close_all_clients(){
-  while(_client_head != NULL){
-    Client_Node *temp = _client_head->next;
-    close(_client_head->req_fd);
-    close(_client_head->resp_fd);
-    close(_client_head->notif_fd);
-    free(_client_head);
-    _client_head = temp;
+void close_all_clients(Client_Node *head){
+  while(head != NULL){
+    Client_Node *temp = head->next;
+    close(head->resp_fd);
+    close(head->notif_fd);
+    free(head);
+    head = temp;
   }
 }
 
@@ -115,6 +117,7 @@ void destroy_server_data(Server_data *server_data){
     sem_destroy(&server_data->full);
     sem_destroy(&server_data->active_sessions);
     pthread_mutex_destroy(&server_data->buffer_mutex);
+    pthread_mutex_destroy(&server_data->client_mutex);
     free(server_data);
   }
 }
@@ -181,9 +184,9 @@ void client_disconnect(int req_fd, int resp_fd, int notif_fd, Server_data *serve
   close(resp_fd);
   close(notif_fd);
   sem_post(&server_data->active_sessions);
-  pthread_mutex_lock(&_client_mutex);
-  remove_client(req_fd, resp_fd, notif_fd);
-  pthread_mutex_unlock(&_client_mutex);
+  pthread_mutex_lock(&server_data->client_mutex);
+  remove_client(server_data->client_head, resp_fd, notif_fd);
+  pthread_mutex_unlock(&server_data->client_mutex);
   *connected = 0;
 }
 
@@ -213,9 +216,9 @@ void* managing_thread_fn(void *arg){
     if(open_pipes(&req_fd, &resp_fd, &notif_fd, req_pipe, resp_pipe, notif_pipe)) return NULL;
 
     /** Add client to current clients list. */
-    pthread_mutex_lock(&_client_mutex);
-    add_client(_client_head, req_fd, resp_fd, notif_fd);
-    pthread_mutex_unlock(&_client_mutex);
+    pthread_mutex_lock(&server_data->client_mutex);
+    add_client(server_data->client_head, resp_fd, notif_fd);
+    pthread_mutex_unlock(&server_data->client_mutex);
 
     while(error == 0 && connected){
       char request_message[MAX_REGISTER_MSG]; 
@@ -299,11 +302,8 @@ void* managing_thread_fn(void *arg){
 
 void handle_SIGUSR1(int signum){
   (void)signum; /** To supress warning. */
-  delete_all_subscriptions();
-  pthread_mutex_lock(&_client_mutex);
-  close_all_clients();
-  pthread_mutex_unlock(&_client_mutex);
-  printf("Destruí tudo boy\n");
+  printf("Recebi\n");
+  _SIGSUSR1_received = 1;
 }
 
 void* host_thread_fn(void* arg){
@@ -323,12 +323,20 @@ void* host_thread_fn(void* arg){
   while (1) {
     char *buffer = (char*) calloc(MAX_REGISTER_MSG, sizeof(char));
     ssize_t ret;
+    int intr = 0;
 
-   
-    if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, NULL)) == -1){
+    if((ret =  read_all(fifo_fd, buffer, MAX_REGISTER_MSG, &intr)) == -1 && intr == 0){
       fprintf(stderr, "Failure reading from register FIFO.\n");
       free(buffer);
       break;
+    }
+
+    if(_SIGSUSR1_received && intr){
+      delete_all_subscriptions();
+      pthread_mutex_lock(&host_thread->server_data->client_mutex);
+      close_all_clients(host_thread->server_data->client_head);
+      pthread_mutex_unlock(&host_thread->server_data->client_mutex);
+      _SIGSUSR1_received = 0;
     }
   	
     if(ret != 0){

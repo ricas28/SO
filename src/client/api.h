@@ -13,7 +13,8 @@
 /// @return 0 if the connection was established successfully, 1 otherwise.
 int kvs_connect(int *req_fd, int *resp_fd, int *notif_fd, int *server_fd, const char* req_pipe_path, 
                 const char *resp_pipe_path, const char *notif_pipe_path, const char *server_pipe_path);
-/// Disconnects from an KVS server.
+
+/// Disconnects from a KVS server.
 /// @return 0 in case of success, 1 otherwise.
 int kvs_disconnect(int server_fd, const char *req_pipe, const char * resp_pipe);
 
